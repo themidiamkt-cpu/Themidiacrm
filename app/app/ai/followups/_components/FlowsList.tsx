@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FlowArrow, Plus, Sparkle } from "@/lib/ui/icons";
 import { useFollowupFlows, type FollowupFlowPointerRow } from "@/hooks/followup/useFollowupFlows";
+import { useFollowupFlowsPeopleCounts } from "@/hooks/followup/useFollowupFlowPeople";
 import type { FollowupFlowSurface } from "@/lib/followup/api-schemas";
 import { DeleteFollowupFlowButton } from "./DeleteFollowupFlowButton";
 import { DuplicateFollowupFlowButton } from "./DuplicateFollowupFlowButton";
@@ -37,6 +38,8 @@ export function FlowsList({ initialData, canWrite, surface }: Props) {
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
   const { data } = useFollowupFlows({ initialData, ...(surface ? { surface } : {}) });
+  // Quantas pessoas estão em cada fluxo agora. Enquanto não chega, o card mostra "…".
+  const { data: pessoas } = useFollowupFlowsPeopleCounts();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [modelosOpen, setModelosOpen] = useState(false);
   const deAtendimento = surface === "atendimento";
@@ -130,7 +133,7 @@ export function FlowsList({ initialData, canWrite, surface }: Props) {
                   </h3>
                   <FlowStatusBadge status={flow.status} />
                 </div>
-                <dl className="grid grid-cols-2 gap-2 pt-1 text-xs">
+                <dl className="grid grid-cols-3 gap-2 pt-1 text-xs">
                   <div>
                     <dt className="text-text-muted">{t("Versão")}</dt>
                     <dd className="font-mono">{flow.active_version_id ? "publicada" : "—"}</dd>
@@ -138,6 +141,12 @@ export function FlowsList({ initialData, canWrite, surface }: Props) {
                   <div>
                     <dt className="text-text-muted">Handoff</dt>
                     <dd className="font-mono">{flow.handoff_policy}</dd>
+                  </div>
+                  <div data-testid={`flow-people-count-${flow.id}`}>
+                    <dt className="text-text-muted">{t("Pessoas no fluxo")}</dt>
+                    <dd className="font-semibold tabular-nums">
+                      {pessoas ? (pessoas.por_fluxo[flow.id] ?? 0) : "…"}
+                    </dd>
                   </div>
                 </dl>
                 <p className="mt-auto pt-2 text-xs text-text-muted">

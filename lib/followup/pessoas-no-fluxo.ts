@@ -95,3 +95,15 @@ export function agruparPessoasNoFluxo(linhas: readonly LinhaDeEnrollment[]): Pes
   }
   return { passos, total_vivos: totalVivos, total_encerrados: totalEncerrados };
 }
+
+/** Pessoas vivas por fluxo (`pointer_id` → quantas), para a lista de fluxos. */
+export function contarPessoasPorFluxo(
+  linhas: readonly { pointer_id: string | null }[],
+): Record<string, number> {
+  const contagem: Record<string, number> = {};
+  for (const { pointer_id } of linhas) {
+    if (!pointer_id) continue;
+    contagem[pointer_id] = (contagem[pointer_id] ?? 0) + 1;
+  }
+  return contagem;
+}

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { agruparPessoasNoFluxo, type LinhaDeEnrollment } from "./pessoas-no-fluxo";
+import {
+  agruparPessoasNoFluxo,
+  contarPessoasPorFluxo,
+  type LinhaDeEnrollment,
+} from "./pessoas-no-fluxo";
 
 const linha = (over: Partial<LinhaDeEnrollment>): LinhaDeEnrollment => ({
   id: "e1",
@@ -55,5 +59,19 @@ describe("agruparPessoasNoFluxo", () => {
     const r = agruparPessoasNoFluxo([linha({ status: "estado_novo" })]);
     expect(r.total_vivos).toBe(0);
     expect(r.total_encerrados).toBe(1);
+  });
+});
+
+describe("contarPessoasPorFluxo", () => {
+  it("soma por fluxo e ignora linha sem fluxo", () => {
+    expect(
+      contarPessoasPorFluxo([
+        { pointer_id: "a" },
+        { pointer_id: "b" },
+        { pointer_id: "a" },
+        { pointer_id: null },
+      ]),
+    ).toEqual({ a: 2, b: 1 });
+    expect(contarPessoasPorFluxo([])).toEqual({});
   });
 });

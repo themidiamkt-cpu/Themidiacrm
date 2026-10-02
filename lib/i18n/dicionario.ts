@@ -576,6 +576,7 @@ export const DICIONARIO: Traducoes = {
   "Mensagem:": { es: "Mensaje:" },
   "Abrir no Inbox": { es: "Abrir en Inbox" },
   // ─── FOLLOW-UP: PESSOAS EM CADA PASSO DO FLUXO (construtor) ───
+  "Pessoas no fluxo": { es: "Personas en el flujo" },
   "Pessoas neste passo": { es: "Personas en este paso" },
   "Ver pessoas neste passo": { es: "Ver personas en este paso" },
   "neste passo agora": { es: "en este paso ahora" },

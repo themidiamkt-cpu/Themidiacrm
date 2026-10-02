@@ -29,3 +29,18 @@ export function useFollowupFlowPeople(flowId: string) {
     staleTime: 15_000,
   });
 }
+
+/** Quantas pessoas estão em cada fluxo agora (`pointer_id` → quantas), para a lista de fluxos. */
+export function useFollowupFlowsPeopleCounts() {
+  return useQuery({
+    queryKey: ["followup", "flows", "people-counts"] as const,
+    queryFn: async () =>
+      (
+        await apiClient.get<{ data: { por_fluxo: Record<string, number>; truncado: boolean } }>(
+          "/api/v1/ai/followup-flows/people-counts",
+        )
+      ).data,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+}
