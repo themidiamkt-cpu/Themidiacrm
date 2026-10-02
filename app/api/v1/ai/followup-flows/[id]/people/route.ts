@@ -60,7 +60,7 @@ function linha(l: Linha, semContato: string): LinhaDeEnrollment {
     contact_name: contato ? rotuloDoContato(contato) : semContato,
     status: l.status,
     current_node_id: l.current_node_id,
-    next_eval_at: l.next_eval_at,
+    proxima_acao_em: l.next_eval_at,
     updated_at: l.updated_at,
     outcome: l.outcome,
   };

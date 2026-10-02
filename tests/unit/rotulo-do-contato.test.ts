@@ -164,6 +164,11 @@ describe("a sétima cópia não nasce", () => {
       motivo: "rótulo do CANAL na lista de conexões (channel_sessions), não de contato",
     },
     {
+      arquivo: "app/app/prospecting/_manual-message.tsx",
+      trecho: "{c.display_name ?? c.phone_number ?? c.id}",
+      motivo: "o mesmo rótulo de CANAL, no seletor de conexão da abordagem manual",
+    },
+    {
       arquivo: "app/app/prospecting/_create-agent.tsx",
       trecho: "channel={channel?.display_name ?? channel?.phone_number}",
       motivo: "mesmo rótulo de CANAL, no resumo da configuração da campanha",

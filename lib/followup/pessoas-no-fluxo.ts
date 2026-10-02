@@ -32,7 +32,7 @@ export interface LinhaDeEnrollment {
   contact_name: string;
   status: string;
   current_node_id: string;
-  next_eval_at: string | null;
+  proxima_acao_em: string | null;
   updated_at: string;
   outcome: string | null;
 }
@@ -42,7 +42,7 @@ export interface PessoaNoPasso {
   contact: { id: string; name: string };
   status: string;
   /** Quando o motor volta a olhar esta pessoa; `null` = esperando resposta ou ação humana. */
-  next_eval_at: string | null;
+  proxima_acao_em: string | null;
   /** Última mudança do enrollment — na prática, desde quando ela está neste passo. */
   updated_at: string;
   outcome: string | null;
@@ -69,7 +69,7 @@ function pessoa(l: LinhaDeEnrollment): PessoaNoPasso {
     enrollment_id: l.id,
     contact: { id: l.contact_id, name: l.contact_name },
     status: l.status,
-    next_eval_at: l.next_eval_at,
+    proxima_acao_em: l.proxima_acao_em,
     updated_at: l.updated_at,
     outcome: l.outcome,
   };

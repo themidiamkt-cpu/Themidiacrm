@@ -72,7 +72,7 @@ function LinhaDaPessoa({ pessoa, vivo }: { pessoa: PessoaNoPasso; vivo: boolean 
   const t = useT();
   const localeDaData = useLocaleDeData();
   const desde = new Date(pessoa.updated_at);
-  const proximo = pessoa.next_eval_at ? new Date(pessoa.next_eval_at) : null;
+  const proximo = pessoa.proxima_acao_em ? new Date(pessoa.proxima_acao_em) : null;
   return (
     <li className="border-t border-border/60 px-3 py-2 first:border-t-0">
       <div className="flex items-start justify-between gap-2">
@@ -131,7 +131,7 @@ export function PainelDePessoas({ rotuloDoNo }: { rotuloDoNo: (nodeId: string) =
         </div>
         <button
           type="button"
-          className="rounded p-1 text-text-muted hover:bg-muted hover:text-text"
+          className="rounded-md p-1 text-text-muted hover:bg-muted hover:text-text"
           onClick={() => abrir(null)}
           aria-label={t("Fechar")}
         >

@@ -8,7 +8,7 @@ const linha = (over: Partial<LinhaDeEnrollment>): LinhaDeEnrollment => ({
   contact_name: "Camila",
   status: "waiting_reply",
   current_node_id: "resposta-1",
-  next_eval_at: null,
+  proxima_acao_em: null,
   updated_at: "2026-10-01T10:00:00.000Z",
   outcome: null,
   ...over,
