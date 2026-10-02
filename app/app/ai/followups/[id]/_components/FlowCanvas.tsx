@@ -48,6 +48,7 @@ import { Plus, X } from "@/lib/ui/icons";
 import { NodeConfigPanel } from "./NodeConfigPanel";
 import { EdgeConfigPanel } from "./EdgeConfigPanel";
 import { EtapasDoFluxoProvider, useEtapasDoFluxo } from "./EtapasDoFluxo";
+import { PainelDePessoas, PessoasDoFluxoProvider } from "./PessoasDoFluxo";
 import { NodePalette } from "./NodePalette";
 import { PublishBar } from "./PublishBar";
 import { NODE_VISUALS, configPadraoDaAcao } from "./nodes/nodeVisuals";
@@ -379,6 +380,9 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
             <Background />
             <Controls />
           </ReactFlow>
+          <PainelDePessoas
+            rotuloDoNo={(nodeId) => nodes.find((n) => n.id === nodeId)?.data.label ?? nodeId}
+          />
           <Button
             type="button"
             variant="secondary"
@@ -471,7 +475,9 @@ export function FlowCanvas(props: Props) {
   return (
     <ReactFlowProvider>
       <EtapasDoFluxoProvider>
-        <FlowCanvasInner {...props} />
+        <PessoasDoFluxoProvider flowId={props.flowId}>
+          <FlowCanvasInner {...props} />
+        </PessoasDoFluxoProvider>
       </EtapasDoFluxoProvider>
     </ReactFlowProvider>
   );

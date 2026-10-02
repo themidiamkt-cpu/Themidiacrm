@@ -5,10 +5,11 @@ import { Handle, Position } from "@xyflow/react";
 import type { FlowBranch } from "@/lib/followup/graph-schema";
 import { rotuloDoRamo } from "@/lib/followup/rotulo-do-ramo";
 import type { NomesDeValor } from "@/lib/followup/vocabulario";
-import { Warning } from "@/lib/ui/icons";
+import { Users, Warning } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 import { useT } from "@/hooks/i18n/useT";
 import { useEtapasDoFluxo } from "../EtapasDoFluxo";
+import { usePessoasDoFluxo } from "../PessoasDoFluxo";
 import type { NodeVisual } from "./nodeVisuals";
 
 /**
@@ -71,6 +72,10 @@ export function NodeCard({
 }: Props) {
   const t = useT();
   const { nomes } = useEtapasDoFluxo();
+  const { doPasso, aberto, abrir } = usePessoasDoFluxo();
+  const pessoas = doPasso(id);
+  const vivos = pessoas?.vivos.length ?? 0;
+  const encerrados = pessoas?.encerrados.length ?? 0;
   const Icon = visual.icon;
   const hasError = (errors?.length ?? 0) > 0;
   // Uma saída só continua sendo a bolinha de sempre no rodapé: não há o que
@@ -106,6 +111,34 @@ export function NodeCard({
             {subtitle}
           </p>
         </div>
+        {(vivos > 0 || encerrados > 0) && (
+          // `nodrag nopan`: é um botão dentro do card, não a alça de arrastar. E o
+          // clique não sobe para o canvas, senão abriria a configuração do nó junto.
+          <button
+            type="button"
+            className={cn(
+              "nodrag nopan flex shrink-0 items-center gap-1 self-start rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums",
+              vivos > 0
+                ? "bg-accent-500 text-white hover:bg-accent-600"
+                : "bg-muted text-text-muted hover:bg-muted/70",
+              aberto === id && "ring-2 ring-accent-500 ring-offset-1 ring-offset-bg",
+            )}
+            onClick={(event) => {
+              event.stopPropagation();
+              abrir(aberto === id ? null : id);
+            }}
+            data-testid={`node-people-${id}`}
+            title={
+              vivos > 0
+                ? `${vivos} ${t("neste passo agora")}${encerrados > 0 ? ` · ${encerrados} ${t("saíram por aqui")}` : ""}`
+                : `${encerrados} ${t("saíram por aqui")}`
+            }
+            aria-label={t("Ver pessoas neste passo")}
+          >
+            <Users size={12} aria-hidden />
+            {vivos > 0 ? vivos : encerrados}
+          </button>
+        )}
       </div>
       {hasError && (
         <p
