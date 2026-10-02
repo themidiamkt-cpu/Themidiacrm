@@ -10,13 +10,20 @@ import { capabilitiesOf } from "@/lib/channels/capabilities";
 import type { ChannelProvider } from "@/lib/channels/types";
 import { phoneLookupVariants } from "@/lib/channels/phone-variants";
 import { decryptWebhookSecret, encryptWebhookSecret } from "@/lib/webhooks/secrets";
+import { criarRascunho, JANELA_MAXIMA_HORAS } from "@/lib/inbox/rascunho-sugerido";
 import {
   campaignConfigSchema,
+  isManualMessageConfig,
+  manualMessageConfigSchema,
   normalizeProspect,
   type CampaignConfig,
+  type ManualMessageConfig,
   type SearchInput,
   type Prospect,
 } from "./schema";
+import { resolveSetupModel } from "./agent-setup";
+import { redatorComIa, redigirMensagens, temSiteProprio } from "./manual-message";
+import { comSaida } from "./rodape-de-saida";
 import {
   ProspectingError,
   providerRequest,
@@ -30,7 +37,7 @@ export interface Campaign {
   organization_id: string;
   name: string;
   search: SearchInput;
-  config: CampaignConfig | null;
+  config: CampaignConfig | ManualMessageConfig | null;
   status: string;
   search_status: string;
   run_id: string | null;
@@ -403,5 +410,225 @@ export async function activateCampaign(
       [org, id, config],
     );
     return { started: true };
+  });
+}
+
+/** Quantas empresas uma chamada prepara. O restante fica `new` e a tela chama de novo. */
+export const LOTE_DA_PREPARACAO_MANUAL = 20;
+
+async function validateManualConfig(db: pg.PoolClient, org: string, input: ManualMessageConfig) {
+  const config = manualMessageConfigSchema.parse(input);
+  const channel = (
+    await db.query<{ provider: ChannelProvider; status: string }>(
+      "select provider,status from channel_sessions where organization_id=$1 and id=$2 and archived_at is null",
+      [org, config.channel_session_id],
+    )
+  ).rows[0];
+  if (
+    !channel ||
+    channel.status !== "WORKING" ||
+    !capabilitiesOf(channel.provider).freeformOutsideWindow
+  )
+    throw new ProspectingError("Escolha uma conexão ativa que permita iniciar conversas de texto.");
+  const stage = await db.query(
+    "select id from crm_stages where organization_id=$1 and pipeline_id=$2 and id=$3 and not is_archived and not is_won and not is_lost",
+    [org, config.pipeline_id, config.stage_id],
+  );
+  if (!stage.rows.length)
+    throw new ProspectingError("Escolha uma etapa aberta do funil para receber os negócios.");
+  if (config.agent_id) {
+    const agent = await db.query(
+      "select id from ai_agents where organization_id=$1 and id=$2 and published_version_id is not null and archived_at is null",
+      [org, config.agent_id],
+    );
+    if (!agent.rows.length)
+      throw new ProspectingError("O agente que continua a conversa precisa estar publicado.");
+  }
+  return config;
+}
+
+/**
+ * Abordagem manual: prepara contato, negócio, conversa e um RASCUNHO com a
+ * mensagem de cada empresa. Nenhuma mensagem é enviada aqui — o envio é o clique
+ * de uma pessoa no Inbox, pelo link do rascunho.
+ *
+ * A campanha termina `completed` de propósito: é o estado em que o worker não
+ * a enxerga e em que "Retomar fila" não existe, então a IA nunca aborda por
+ * conta própria uma empresa que está esperando o envio humano. O candidato fica
+ * `queued` ("trabalho vivo": não é expurgado) com o rascunho anotado em `data`.
+ *
+ * Trabalha em lotes (`LOTE_DA_PREPARACAO_MANUAL`): redigir com IA leva alguns
+ * segundos por empresa, e uma lista de cem não cabe numa requisição. Chamar de
+ * novo com a MESMA configuração continua de onde parou.
+ */
+export async function prepareManualCampaign(
+  pool: pg.Pool,
+  admin: SupabaseClient,
+  org: string,
+  id: string,
+  input: ManualMessageConfig,
+) {
+  return withProspectingLock(pool, org, async (db) => {
+    const config = await validateManualConfig(db, org, input);
+    const c = (
+      await db.query<Campaign>(
+        "select * from prospecting_campaigns where organization_id=$1 and id=$2",
+        [org, id],
+      )
+    ).rows[0];
+    if (!c) throw new ProspectingError("Campanha não encontrada.", 404);
+    const retomando = isManualMessageConfig(c.config) && c.status === "completed";
+    if (!retomando && (c.status !== "draft" || c.search_status !== "succeeded" || c.config))
+      throw new ProspectingError(
+        "Aguarde a busca terminar; uma campanha já iniciada com a IA não vira abordagem manual.",
+        409,
+      );
+    if (
+      retomando &&
+      JSON.stringify(manualMessageConfigSchema.parse(c.config)) !== JSON.stringify(config)
+    )
+      throw new ProspectingError(
+        "A preparação já começou. Continue com a mesma mensagem e configuração.",
+        409,
+      );
+    // Congela a configuração ANTES de criar qualquer coisa: se a requisição cair
+    // no meio, a campanha já está fora do alcance da abordagem automática.
+    await db.query(
+      "update prospecting_campaigns set config=$3,status='completed',error=null,updated_at=now() where organization_id=$1 and id=$2",
+      [org, id, config],
+    );
+    const pendentes = (
+      await db.query<Candidate>(
+        "select * from prospecting_candidates where organization_id=$1 and campaign_id=$2 and status='new' order by created_at,id",
+        [org, id],
+      )
+    ).rows;
+    const pular = (candidateId: string, motivo: string) =>
+      db.query(
+        "update prospecting_candidates set status='skipped',error=$3,updated_at=now() where organization_id=$1 and id=$2",
+        [org, candidateId, motivo],
+      );
+    let skipped = 0;
+    const aptos: Candidate[] = [];
+    for (const p of pendentes) {
+      if (!p.phone) {
+        await pular(p.id, "Sem telefone brasileiro válido.");
+        skipped += 1;
+        continue;
+      }
+      if (config.only_without_site && temSiteProprio(p.data.website)) {
+        await pular(p.id, "Já tem site próprio.");
+        skipped += 1;
+        continue;
+      }
+      const known = await db.query(
+        "select id from contacts where organization_id=$1 and phone_number=any($2::text[])",
+        [org, phoneLookupVariants(p.phone)],
+      );
+      if (known.rows.length && !p.contact_id) {
+        const owned = await db.query(
+          "select id from contacts where organization_id=$1 and id=$2 and source='prospecting' and source_metadata->>'campaign_id'=$3 and source_metadata->>'place_id'=$4",
+          [org, known.rows[0].id, id, p.data.key],
+        );
+        if (owned.rows[0]) p.contact_id = owned.rows[0].id;
+      }
+      if (known.rows.length && !p.contact_id) {
+        await pular(p.id, "Contato já existe no CRM; atendimento preservado.");
+        skipped += 1;
+        continue;
+      }
+      aptos.push(p);
+    }
+    const lote = aptos.slice(0, LOTE_DA_PREPARACAO_MANUAL);
+    let redator = null;
+    if (config.personalize && lote.length) {
+      try {
+        redator = redatorComIa(
+          pool,
+          org,
+          await resolveSetupModel(db, org, config.channel_session_id),
+        );
+      } catch {
+        // Sem modelo disponível a preparação não para: sai a mensagem base.
+        redator = null;
+      }
+    }
+    const { textos, comIa } = await redigirMensagens(lote, config.base_message, redator);
+    const ctx = {
+      organization_id: org,
+      actor: { type: "webhook_source" as const, id },
+      requestId: `rule:${id}`,
+    };
+    let prepared = 0;
+    for (const p of lote) {
+      let contactId = p.contact_id;
+      if (!contactId) {
+        const contact = await createContactHandler(admin, ctx, {
+          name: p.data.name,
+          display_name: p.data.name,
+          phone_number: p.phone!,
+          source: "prospecting",
+          source_metadata: { campaign_id: id, place_id: p.data.key, maps_url: p.data.maps_url },
+          consent: { legitimate_interest: { ref: config.legal_basis_ref } },
+        });
+        contactId = String(contact.contact.id);
+        await db.query(
+          "update prospecting_candidates set contact_id=$3 where organization_id=$1 and id=$2",
+          [org, p.id, contactId],
+        );
+      }
+      let leadId = p.lead_id;
+      if (!leadId) {
+        const existing = await db.query(
+          "select id from crm_leads where organization_id=$1 and source='prospecting' and external_id=$2",
+          [org, p.id],
+        );
+        leadId = existing.rows[0]?.id ?? null;
+      }
+      if (!leadId) {
+        const lead = await createLeadHandler(admin, ctx, {
+          ...createLeadSchema.parse({
+            pipeline_id: config.pipeline_id,
+            stage_id: config.stage_id,
+            title: p.data.name,
+            contact_id: contactId,
+            ...(config.agent_id ? { owner_agent_id: config.agent_id } : {}),
+            source: "prospecting",
+            description: `Campanha: ${c.name}\nAbordagem manual: a mensagem fica pronta no Inbox para envio por uma pessoa.`,
+          }),
+          external_id: p.id,
+        });
+        leadId = String(lead.id);
+        await db.query(
+          "update prospecting_candidates set lead_id=$3 where organization_id=$1 and id=$2",
+          [org, p.id, leadId],
+        );
+      }
+      const boundary = await beginServiceAtOrigin(admin, org, contactId, config.channel_session_id);
+      await db.query(
+        "update conversations set active_ai_agent_id=coalesce($3::uuid,active_ai_agent_id),metadata=coalesce(metadata,'{}'::jsonb) || jsonb_build_object('prospecting_campaign_id',$4::text) where organization_id=$1 and id=$2",
+        [org, boundary.conversation_id, config.agent_id, id],
+      );
+      const texto = comSaida(textos.get(p.id) ?? config.base_message);
+      const rascunho = await criarRascunho(admin, {
+        organizationId: org,
+        conversationId: boundary.conversation_id,
+        texto,
+        origem: "prospeccao",
+        expiraEmHoras: JANELA_MAXIMA_HORAS,
+      });
+      if (!rascunho.ok) throw new ProspectingError("Não foi possível guardar a mensagem pronta.");
+      await db.query(
+        "update prospecting_candidates set status='queued',conversation_id=$3,service_boundary=$4,data=data || jsonb_build_object('manual_draft_id',$5::text,'manual_message',$6::text),error=null,updated_at=now() where organization_id=$1 and id=$2",
+        [org, p.id, boundary.conversation_id, boundary, rascunho.draftId, texto],
+      );
+      prepared += 1;
+    }
+    return {
+      prepared,
+      skipped,
+      remaining: aptos.length - lote.length,
+      personalized: comIa,
+    };
   });
 }

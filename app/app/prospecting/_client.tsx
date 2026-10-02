@@ -11,8 +11,15 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiClient } from "@/lib/api/client";
 import { useT } from "@/hooks/i18n/useT";
-import { safePublicLink, type CampaignConfig, type Prospect } from "@/lib/prospecting/schema";
+import {
+  isManualMessageConfig,
+  safePublicLink,
+  type CampaignConfig,
+  type ManualMessageConfig,
+  type Prospect,
+} from "@/lib/prospecting/schema";
 import { ProspectingAgentBuilder, type CreatedProspectingAgent } from "./_create-agent";
+import { ContinueManualButton, ManualMessageForm } from "./_manual-message";
 import type { ProspectingAgentSetupInput } from "@/lib/prospecting/agent-setup-schema";
 
 type Campaign = {
@@ -21,7 +28,7 @@ type Campaign = {
   status: string;
   search_status: string;
   error: string | null;
-  config: CampaignConfig | null;
+  config: CampaignConfig | ManualMessageConfig | null;
   result_count: number;
   skipped_count: number;
   cost_usd: string | null;
@@ -30,11 +37,13 @@ type Campaign = {
 type Candidate = {
   id: string;
   campaign_id: string;
-  data: Prospect;
+  data: Prospect & { manual_message?: string | null };
   progress: string;
   message_status: string | null;
   error: string | null;
   conversation_id: string | null;
+  /** Rascunho da abordagem manual ainda válido: o link leva ao Inbox com o texto no campo. */
+  draft_id: string | null;
 };
 type State = {
   configured: boolean;
@@ -65,6 +74,7 @@ const labels: Record<string, string> = {
   skipped: "Não abordado",
   replied: "Respondeu",
   qualified: "Qualificado",
+  manual_ready: "Mensagem pronta",
 };
 const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
 const emptyConfig: CampaignConfig = {
@@ -101,12 +111,18 @@ export function ProspectingClient() {
   const [enrich, setEnrich] = useState(true);
   const [campaignDrafts, setCampaignDrafts] = useState<Record<string, CampaignConfig>>({});
   const [manualCampaigns, setManualCampaigns] = useState<Record<string, boolean>>({});
+  // Terceiro modo: a IA só redige e uma pessoa envia pelo Inbox.
+  const [ownMessageCampaigns, setOwnMessageCampaigns] = useState<Record<string, boolean>>({});
   const [createdAgents, setCreatedAgents] = useState<{ id: string; name: string }[]>([]);
   const campaign = data?.campaigns.find((c) => c.id === selected) ?? data?.campaigns[0];
   // A stored config is frozen by activation; unsaved choices belong to one campaign.
-  const config = campaign?.config ?? (campaign && campaignDrafts[campaign.id]) ?? emptyConfig;
+  const manualConfig = campaign && isManualMessageConfig(campaign.config) ? campaign.config : null;
+  const autoConfig =
+    campaign?.config && !isManualMessageConfig(campaign.config) ? campaign.config : null;
+  const config = autoConfig ?? (campaign && campaignDrafts[campaign.id]) ?? emptyConfig;
   const funil = config.pipeline_id;
-  const manual = !!campaign && (manualCampaigns[campaign.id] || !!campaign.config);
+  const manual = !!campaign && (manualCampaigns[campaign.id] || !!autoConfig);
+  const ownMessage = !!campaign && !campaign.config && !!ownMessageCampaigns[campaign.id];
   const agents = [
     ...new Map(
       [...(data?.agents ?? []), ...createdAgents].map((agent) => [agent.id, agent]),
@@ -359,7 +375,10 @@ export function ProspectingClient() {
                 >
                   <span className="block text-sm font-medium">{c.name}</span>
                   <span className="mt-1 block text-xs text-muted-foreground">
-                    {t(labels[c.status] ?? c.status)} · {c.result_count} {t("empresas")}
+                    {isManualMessageConfig(c.config)
+                      ? t("Mensagem manual")
+                      : t(labels[c.status] ?? c.status)}{" "}
+                    · {c.result_count} {t("empresas")}
                   </span>
                 </button>
               ))}
@@ -390,7 +409,11 @@ export function ProspectingClient() {
                         : ""}
                     </p>
                   </div>
-                  <Badge variant="outline">{t(labels[campaign.status] ?? campaign.status)}</Badge>
+                  <Badge variant="outline">
+                    {manualConfig
+                      ? t("Mensagem manual")
+                      : t(labels[campaign.status] ?? campaign.status)}
+                  </Badge>
                 </div>
                 {campaign.error && (
                   <p role="alert" className="mt-4 rounded-md bg-destructive/10 p-3 text-sm">
@@ -400,7 +423,9 @@ export function ProspectingClient() {
                 <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-4">
                   {[
                     [t("Encontrados"), candidates.length],
-                    [t("Na fila"), count(["queued", "sending"])],
+                    manualConfig
+                      ? [t("Prontas para enviar"), count(["manual_ready"])]
+                      : [t("Na fila"), count(["queued", "sending"])],
                     [t("Responderam"), count(["replied", "qualified"])],
                     [t("Qualificados"), count(["qualified"])],
                   ].map(([label, value]) => (
@@ -416,12 +441,29 @@ export function ProspectingClient() {
                     {t("resultados repetidos ou indisponíveis foram desconsiderados.")}
                   </p>
                 )}
-                {campaign.config && (
+                {manualConfig && (
+                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+                    <p className="max-w-xl text-sm text-muted-foreground">
+                      {t(
+                        "Envio manual: abra cada conversa em “Enviar pelo Inbox”, revise a mensagem e envie. A IA não aborda as empresas desta campanha por conta própria.",
+                      )}
+                    </p>
+                    {count(["new"]) > 0 && (
+                      <ContinueManualButton
+                        campaignId={campaign.id}
+                        config={manualConfig}
+                        onChanged={() => query.refetch()}
+                        label={t("Preparar as que faltam")}
+                      />
+                    )}
+                  </div>
+                )}
+                {autoConfig && (
                   <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
                     <p className="text-sm text-muted-foreground">
-                      {t("Ritmo:")} {campaign.config.daily_limit}{" "}
-                      {t("abordagens em 24 horas, com pelo menos")}{" "}
-                      {campaign.config.interval_minutes} {t("minutos entre elas.")}
+                      {t("Ritmo:")} {autoConfig.daily_limit}{" "}
+                      {t("abordagens em 24 horas, com pelo menos")} {autoConfig.interval_minutes}{" "}
+                      {t("minutos entre elas.")}
                     </p>
                     {campaign.status === "running" ? (
                       <Button
@@ -464,27 +506,59 @@ export function ProspectingClient() {
                         <div className="flex flex-wrap gap-2">
                           <Button
                             type="button"
-                            variant={!manual ? "secondary" : "outline"}
-                            onClick={() =>
+                            variant={!manual && !ownMessage ? "secondary" : "outline"}
+                            onClick={() => {
+                              setOwnMessageCampaigns((current) => ({
+                                ...current,
+                                [campaign.id]: false,
+                              }));
                               setManualCampaigns((current) => ({
                                 ...current,
                                 [campaign.id]: false,
-                              }))
-                            }
+                              }));
+                            }}
                           >
                             {t("Configurar por conversa")}
                           </Button>
                           <Button
                             type="button"
-                            variant={manual ? "secondary" : "outline"}
-                            onClick={() =>
-                              setManualCampaigns((current) => ({ ...current, [campaign.id]: true }))
-                            }
+                            variant={manual && !ownMessage ? "secondary" : "outline"}
+                            onClick={() => {
+                              setOwnMessageCampaigns((current) => ({
+                                ...current,
+                                [campaign.id]: false,
+                              }));
+                              setManualCampaigns((current) => ({
+                                ...current,
+                                [campaign.id]: true,
+                              }));
+                            }}
                           >
                             {t("Usar agente existente / configurar manualmente")}
                           </Button>
+                          <Button
+                            type="button"
+                            variant={ownMessage ? "secondary" : "outline"}
+                            onClick={() =>
+                              setOwnMessageCampaigns((current) => ({
+                                ...current,
+                                [campaign.id]: true,
+                              }))
+                            }
+                          >
+                            {t("Mensagem manual")}
+                          </Button>
                         </div>
-                        {!manual && !config.agent_id && data && (
+                        {ownMessage && data && (
+                          <ManualMessageForm
+                            key={campaign.id}
+                            campaignId={campaign.id}
+                            saved={null}
+                            options={{ agents, channels: data.channels, stages: data.stages }}
+                            onChanged={() => query.refetch()}
+                          />
+                        )}
+                        {!ownMessage && !manual && !config.agent_id && data && (
                           <ProspectingAgentBuilder
                             key={campaign.id}
                             campaign={campaign}
@@ -494,7 +568,7 @@ export function ProspectingClient() {
                             onCreated={selectCreatedAgent}
                           />
                         )}
-                        {!manual && config.agent_id && (
+                        {!ownMessage && !manual && config.agent_id && (
                           <section
                             aria-label={t("Agente selecionado")}
                             className="space-y-2 rounded-xl border bg-muted/20 p-4 text-sm"
@@ -529,7 +603,7 @@ export function ProspectingClient() {
                         )}
                       </div>
                     )}
-                    {(manual || config.agent_id) && (
+                    {!ownMessage && (manual || config.agent_id) && (
                       <form
                         className="mt-5 space-y-4"
                         onSubmit={(e) => {
@@ -825,14 +899,23 @@ export function ProspectingClient() {
                                   {t("Mensagem:")} {c.message_status}
                                 </p>
                               )}
+                              {c.progress === "manual_ready" && c.data.manual_message && (
+                                <p className="mt-2 line-clamp-4 text-xs whitespace-pre-wrap text-muted-foreground">
+                                  {c.data.manual_message}
+                                </p>
+                              )}
                             </td>
                             <td className="p-4 align-top">
                               {c.conversation_id && (
                                 <Link
                                   className="underline"
-                                  href={`/app/inbox?id=${c.conversation_id}`}
+                                  href={
+                                    c.draft_id
+                                      ? `/app/inbox?id=${c.conversation_id}&rascunho=${c.draft_id}`
+                                      : `/app/inbox?id=${c.conversation_id}`
+                                  }
                                 >
-                                  {t("Abrir no Inbox")}
+                                  {c.draft_id ? t("Enviar pelo Inbox") : t("Abrir no Inbox")}
                                 </Link>
                               )}
                             </td>

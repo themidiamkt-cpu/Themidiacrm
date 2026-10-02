@@ -49,6 +49,34 @@ recupera a criação anterior sem produzir outro agente. O histórico de configu
 Cancelar uma resposta interrompe a espera e propaga o cancelamento à chamada de IA.
 Isso não garante estorno de tokens que o provedor já tenha processado.
 
+### Mensagem manual: a IA escreve, uma pessoa envia
+
+O terceiro modo de **Preparar a abordagem** não usa a fila da IA. O operador escolhe
+conexão, funil, etapa inicial e escreve uma **mensagem base**; a IA adapta o texto a
+cada empresa usando só os dados da busca (nome, bairro, tipo de negócio, nota e
+avaliações). Marcadores aceitos na base: `{{empresa}}`, `{{bairro}}`, `{{categoria}}`,
+`{{nota}}` e `{{avaliacoes}}`. Sem IA disponível, ou com a adaptação desligada, sai a
+base com os marcadores trocados.
+
+**Preparar mensagens** cria contato, negócio na etapa escolhida e conversa, e guarda o
+texto como rascunho sugerido da conversa (validade de 30 dias), já com o aviso de saída.
+Nenhuma mensagem é enviada. Na tabela de resultados a empresa aparece como **Mensagem
+pronta** e o link **Enviar pelo Inbox** abre a conversa com o texto no campo. Depois do
+envio humano o progresso vira **Abordado**; quando a empresa responde, **Respondeu**.
+
+A campanha preparada assim fica marcada como **Mensagem manual** e deixa de aceitar a
+abordagem automática: não há fila para iniciar nem retomar, então a IA nunca aborda por
+conta própria uma empresa que espera o envio de uma pessoa. A opção **só empresas sem
+site próprio** deixa de fora quem tem domínio próprio; perfil em rede social e link de
+WhatsApp não contam como site. O **agente que continua a conversa** é opcional: a
+conversa nasce ligada a ele, e ele atende as respostas depois que a pessoa devolve a
+conversa à IA no Inbox.
+
+A preparação anda em lotes de 20 empresas; a tela repete a chamada até acabar e, se for
+interrompida, **Preparar as que faltam** continua de onde parou. Código:
+`lib/prospecting/manual-message.ts` (redação) e `prepareManualCampaign` em
+`lib/prospecting/store.ts`.
+
 ### Assistente de voz
 
 O editor do agente oferece **Assistente de voz**, com configuração de ElevenLabs

@@ -8,11 +8,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { capabilitiesOf } from "@/lib/channels/capabilities";
 import type { ChannelProvider } from "@/lib/channels/types";
 import { ProspectingError } from "@/lib/prospecting/provider";
-import { prospectingInputSchema } from "@/lib/prospecting/schema";
+import { isManualMessageConfig, prospectingInputSchema } from "@/lib/prospecting/schema";
 import {
   activateCampaign,
   configureCredential,
   createSearch,
+  prepareManualCampaign,
   validateConfig,
   withProspectingLock,
   type Campaign,
@@ -45,7 +46,10 @@ export async function GET() {
         [org],
       ),
       db.query(
-        "select p.id,p.campaign_id,p.data,p.status,p.error,p.lead_id,p.conversation_id,p.attempted_at,m.status as message_status,case when l.stage_id::text=c.config->>'qualified_stage_id' then 'qualified' when v.last_inbound_at is not null then 'replied' else p.status end as progress from prospecting_candidates p join prospecting_campaigns c on c.organization_id=p.organization_id and c.id=p.campaign_id left join crm_leads l on l.organization_id=p.organization_id and l.id=p.lead_id left join conversations v on v.organization_id=p.organization_id and v.id=p.conversation_id left join messages m on m.organization_id=p.organization_id and m.id=p.message_id where p.organization_id=$1 order by p.created_at desc limit 5000",
+        // Abordagem manual: `d` é o rascunho que a preparação guardou. Enquanto ele
+        // vale, a tela leva ao Inbox com o texto no campo (`draft_id`); depois que
+        // a pessoa envia, o progresso vira "abordado" sem ninguém tocar no candidato.
+        "select p.id,p.campaign_id,p.data,p.status,p.error,p.lead_id,p.conversation_id,p.attempted_at,m.status as message_status,case when d.consumed_at is null and d.expires_at>now() and v.last_outbound_at is null then d.id end as draft_id,case when l.stage_id::text=c.config->>'qualified_stage_id' then 'qualified' when v.last_inbound_at is not null then 'replied' when d.id is not null and (d.consumed_at is not null or v.last_outbound_at is not null) then 'sent' when d.id is not null then 'manual_ready' else p.status end as progress from prospecting_candidates p join prospecting_campaigns c on c.organization_id=p.organization_id and c.id=p.campaign_id left join crm_leads l on l.organization_id=p.organization_id and l.id=p.lead_id left join conversations v on v.organization_id=p.organization_id and v.id=p.conversation_id left join messages m on m.organization_id=p.organization_id and m.id=p.message_id left join conversation_drafts d on d.organization_id=p.organization_id and d.conversation_id=p.conversation_id and d.id::text=p.data->>'manual_draft_id' where p.organization_id=$1 order by p.created_at desc limit 5000",
         [org],
       ),
       db.query(
@@ -109,6 +113,8 @@ export async function POST(req: Request) {
       result = await createSearch(pool, admin, org, body.request_id, body.search);
     else if (body.action === "start")
       result = await activateCampaign(pool, admin, org, body.id, body.config);
+    else if (body.action === "prepare_manual")
+      result = await prepareManualCampaign(pool, admin, org, body.id, body.config);
     else if (body.action === "pause") {
       // Pause does not wait for the worker lock; the delivery guard sees it before sending.
       const changed = await pool.query(
@@ -127,6 +133,12 @@ export async function POST(req: Request) {
           )
         ).rows[0];
         if (!c?.config) throw new ProspectingError("Campanha pausada não encontrada.", 404);
+        // Abordagem manual não tem fila: quem envia é uma pessoa, pelo Inbox.
+        if (isManualMessageConfig(c.config))
+          throw new ProspectingError(
+            "Esta campanha é de envio manual e não tem fila para retomar.",
+            409,
+          );
         await validateConfig(db, org, c.config);
         if (
           (

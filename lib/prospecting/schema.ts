@@ -14,6 +14,36 @@ export const campaignConfigSchema = z
     legal_basis_ref: z.string().trim().min(3).max(500),
   })
   .strict();
+/**
+ * Abordagem MANUAL: a IA só redige a primeira mensagem de cada empresa; quem
+ * envia é uma pessoa, pelo Inbox. Mora no mesmo `config` da campanha e se
+ * distingue por `mode` — a campanha automática não tem esse campo, então uma
+ * nunca passa pelo schema da outra (os dois são `.strict()`).
+ *
+ * `agent_id` é opcional: quando informado, a conversa nasce ligada a esse
+ * agente, que atende as respostas depois que a pessoa devolve a conversa à IA.
+ */
+export const manualMessageConfigSchema = z
+  .object({
+    mode: z.literal("manual_message"),
+    channel_session_id: z.string().uuid(),
+    pipeline_id: z.string().uuid(),
+    stage_id: z.string().uuid(),
+    agent_id: z.string().uuid().nullable().default(null),
+    base_message: z.string().trim().min(10).max(2000),
+    personalize: z.boolean().default(true),
+    only_without_site: z.boolean().default(false),
+    legal_basis_ref: z.string().trim().min(3).max(500),
+  })
+  .strict();
+export type ManualMessageConfig = z.infer<typeof manualMessageConfigSchema>;
+export function isManualMessageConfig(config: unknown): config is ManualMessageConfig {
+  return (
+    !!config &&
+    typeof config === "object" &&
+    (config as { mode?: unknown }).mode === "manual_message"
+  );
+}
 export const searchSchema = z
   .object({
     name: z.string().trim().min(2).max(120),
@@ -33,6 +63,13 @@ export const prospectingInputSchema = z.discriminatedUnion("action", [
     .strict(),
   z
     .object({ action: z.literal("start"), id: z.string().uuid(), config: campaignConfigSchema })
+    .strict(),
+  z
+    .object({
+      action: z.literal("prepare_manual"),
+      id: z.string().uuid(),
+      config: manualMessageConfigSchema,
+    })
     .strict(),
   z.object({ action: z.literal("pause"), id: z.string().uuid() }).strict(),
   z.object({ action: z.literal("resume"), id: z.string().uuid() }).strict(),
