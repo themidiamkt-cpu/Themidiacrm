@@ -22,7 +22,8 @@ import {
   type Prospect,
 } from "./schema";
 import { resolveSetupModel } from "./agent-setup";
-import { redatorComIa, redigirMensagens, temSiteProprio } from "./manual-message";
+import { redatorComIa, redigirMensagens } from "./manual-message";
+import { temSiteProprio } from "./site-proprio";
 import { comSaida } from "./rodape-de-saida";
 import {
   ProspectingError,
@@ -186,6 +187,8 @@ export async function synchronizeSearch(db: pg.PoolClient, admin: SupabaseClient
     for (const item of items) {
       const p = normalizeProspect(item);
       if (!p) continue;
+      // Pedido na busca: só empresas sem site próprio. Conta como desconsiderada.
+      if (c.search.only_without_site && temSiteProprio(p.website)) continue;
       const result = await db.query(
         "insert into prospecting_candidates(organization_id,campaign_id,place_id,phone,data) values($1,$2,$3,$4,$5) on conflict do nothing",
         [c.organization_id, c.id, p.key, p.phone, p],

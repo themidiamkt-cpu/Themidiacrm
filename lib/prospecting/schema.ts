@@ -52,6 +52,13 @@ export const searchSchema = z
     limit: z.number().int().min(1).max(100).default(20),
     budget_usd: z.number().min(0.5).max(10).default(1),
     enrich: z.boolean().default(true),
+    /**
+     * Descarta, na importação, a empresa que tem site PRÓPRIO (regra de
+     * `site-proprio.ts`: Instagram, Facebook e link de WhatsApp não contam). O
+     * filtro do provedor ("withoutWebsite") não serve: ele trata perfil de rede
+     * social como site e jogaria fora exatamente o público de uma oferta de site.
+     */
+    only_without_site: z.boolean().default(false),
   })
   .strict();
 export const prospectingInputSchema = z.discriminatedUnion("action", [

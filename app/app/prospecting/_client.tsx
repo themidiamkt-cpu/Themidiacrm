@@ -20,6 +20,7 @@ import {
 } from "@/lib/prospecting/schema";
 import { ProspectingAgentBuilder, type CreatedProspectingAgent } from "./_create-agent";
 import { ContinueManualButton, ManualMessageForm } from "./_manual-message";
+import { temSiteProprio } from "@/lib/prospecting/site-proprio";
 import type { ProspectingAgentSetupInput } from "@/lib/prospecting/agent-setup-schema";
 
 type Campaign = {
@@ -32,6 +33,7 @@ type Campaign = {
   result_count: number;
   skipped_count: number;
   cost_usd: string | null;
+  search?: { only_without_site?: boolean } | null;
   next_send_at: string;
 };
 type Candidate = {
@@ -109,6 +111,7 @@ export function ProspectingClient() {
   const [limit, setLimit] = useState(20);
   const [budget, setBudget] = useState(1);
   const [enrich, setEnrich] = useState(true);
+  const [onlyWithoutSite, setOnlyWithoutSite] = useState(false);
   const [campaignDrafts, setCampaignDrafts] = useState<Record<string, CampaignConfig>>({});
   const [manualCampaigns, setManualCampaigns] = useState<Record<string, boolean>>({});
   // Terceiro modo: a IA só redige e uma pessoa envia pelo Inbox.
@@ -168,6 +171,13 @@ export function ProspectingClient() {
     );
   }
   const candidates = data?.candidates.filter((c) => c.campaign_id === campaign?.id) ?? [];
+  // Filtro da tabela por site próprio. Perfil em rede social e link de WhatsApp
+  // não contam como site — é a mesma regra da preparação da mensagem manual.
+  const [filtroSite, setFiltroSite] = useState<"all" | "without_site" | "with_site">("all");
+  const comSite = candidates.filter((c) => temSiteProprio(c.data.website));
+  const semSite = candidates.filter((c) => !temSiteProprio(c.data.website));
+  const visiveis =
+    filtroSite === "with_site" ? comSite : filtroSite === "without_site" ? semSite : candidates;
   async function perform(body: unknown, message: string) {
     setBusy(true);
     setError(null);
@@ -262,7 +272,14 @@ export function ProspectingClient() {
               className="mt-4 space-y-4"
               onSubmit={async (e) => {
                 e.preventDefault();
-                const fingerprint = JSON.stringify([niche, location, limit, budget, enrich]);
+                const fingerprint = JSON.stringify([
+                  niche,
+                  location,
+                  limit,
+                  budget,
+                  enrich,
+                  onlyWithoutSite,
+                ]);
                 if (searchAttempt.current?.fingerprint !== fingerprint)
                   searchAttempt.current = { fingerprint, id: randomId() };
                 const success = await perform(
@@ -276,6 +293,7 @@ export function ProspectingClient() {
                       limit,
                       budget_usd: budget,
                       enrich,
+                      only_without_site: onlyWithoutSite,
                     },
                   },
                   t("Solicitação registrada. Acompanhe o estado da busca nesta tela."),
@@ -349,6 +367,22 @@ export function ProspectingClient() {
                   className="mt-1"
                 />
                 {t("Enriquecer com e-mails comerciais e redes encontradas no site")}
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={onlyWithoutSite}
+                  onChange={(e) => setOnlyWithoutSite(e.target.checked)}
+                />
+                <span>
+                  {t("Trazer só empresas sem site próprio")}
+                  <span className="block text-xs text-muted-foreground">
+                    {t(
+                      "Instagram, Facebook e link de WhatsApp contam como sem site. A Apify cobra pelas empresas analisadas, inclusive as descartadas: aumente o número de empresas para compensar.",
+                    )}
+                  </span>
+                </span>
               </label>
               <p className="text-xs text-muted-foreground">
                 {t(
@@ -438,7 +472,11 @@ export function ProspectingClient() {
                 {campaign.skipped_count > 0 && (
                   <p className="mt-3 text-xs text-muted-foreground">
                     {campaign.skipped_count}{" "}
-                    {t("resultados repetidos ou indisponíveis foram desconsiderados.")}
+                    {campaign.search?.only_without_site
+                      ? t(
+                          "resultados repetidos, indisponíveis ou com site próprio foram desconsiderados.",
+                        )
+                      : t("resultados repetidos ou indisponíveis foram desconsiderados.")}
                   </p>
                 )}
                 {manualConfig && (
@@ -847,6 +885,31 @@ export function ProspectingClient() {
                         "Encontrado é diferente de qualificado. A qualificação depende do que for confirmado na conversa.",
                       )}
                     </p>
+                    <div
+                      className="mt-4 flex flex-wrap gap-2"
+                      role="group"
+                      aria-label={t("Filtrar por site")}
+                    >
+                      {(
+                        [
+                          ["all", t("Todas"), candidates.length],
+                          ["without_site", t("Sem site próprio"), semSite.length],
+                          ["with_site", t("Com site próprio"), comSite.length],
+                        ] as const
+                      ).map(([valor, rotulo, quantas]) => (
+                        <Button
+                          key={valor}
+                          type="button"
+                          size="sm"
+                          variant={filtroSite === valor ? "secondary" : "outline"}
+                          aria-pressed={filtroSite === valor}
+                          onClick={() => setFiltroSite(valor)}
+                          data-testid={`filtro-site-${valor}`}
+                        >
+                          {rotulo} · {quantas}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
@@ -859,7 +922,14 @@ export function ProspectingClient() {
                         </tr>
                       </thead>
                       <tbody>
-                        {candidates.map((c) => (
+                        {visiveis.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="p-4 text-sm text-muted-foreground">
+                              {t("Nenhuma empresa neste filtro.")}
+                            </td>
+                          </tr>
+                        )}
+                        {visiveis.map((c) => (
                           <tr key={c.id} className="border-b last:border-0">
                             <td className="p-4 align-top">
                               <p className="font-medium">{c.data.name}</p>
@@ -870,6 +940,14 @@ export function ProspectingClient() {
                             </td>
                             <td className="max-w-64 p-4 align-top">
                               <p className="text-xs text-muted-foreground">{c.data.address}</p>
+                              <Badge
+                                variant={temSiteProprio(c.data.website) ? "neutral" : "success"}
+                                className="mt-2"
+                              >
+                                {temSiteProprio(c.data.website)
+                                  ? t("Tem site próprio")
+                                  : t("Sem site próprio")}
+                              </Badge>
                               {safePublicLink(c.data.website) && (
                                 <a
                                   className="mt-1 block underline"
@@ -877,7 +955,9 @@ export function ProspectingClient() {
                                   target="_blank"
                                   rel="noreferrer"
                                 >
-                                  {t("Site da empresa")}
+                                  {temSiteProprio(c.data.website)
+                                    ? t("Site da empresa")
+                                    : t("Link do perfil (rede social)")}
                                 </a>
                               )}
                               <p className="mt-1 text-xs text-muted-foreground">
