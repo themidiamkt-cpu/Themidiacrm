@@ -8,6 +8,7 @@ import {
   useState,
   type ClipboardEvent,
   type KeyboardEvent,
+  useLayoutEffect,
 } from "react";
 import { PaperPlaneTilt } from "@/lib/ui/icons";
 import { Button } from "@/components/ui/button";
@@ -166,12 +167,25 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     setPendingEm(mode);
   }
 
+  // Com texto SUGERIDO no campo (rascunho de integração ou de prospecção), o
+  // teto de altura dobra: quem vai revisar antes de enviar precisa LER o texto
+  // inteiro, e 160px mostravam duas linhas de uma mensagem de oito.
+  const comTextoSugerido = rascunho?.leitura.estado === "sugerido" && !rascunhoUsado;
+  const alturaMaxima = comTextoSugerido ? 320 : 160;
+
   function autoresize() {
     const ta = taRef.current;
     if (!ta) return;
     ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
+    ta.style.height = `${Math.min(ta.scrollHeight, alturaMaxima)}px`;
   }
+
+  // O campo nascia com UMA linha mesmo quando já vinha preenchido (o ajuste de
+  // altura só rodava ao digitar). Mede uma vez ao montar e quando o teto muda.
+  useLayoutEffect(() => {
+    autoresize();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alturaMaxima]);
 
   function handleSubmit() {
     const body = text.trim();
@@ -452,7 +466,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                 : t("Enter envia · Shift+Enter quebra linha")
             }
             className={cn(
-              "max-h-40 min-h-9 flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm",
+              "min-h-9 flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm",
+              comTextoSugerido ? "max-h-80" : "max-h-40",
               "placeholder:text-muted-foreground focus:ring-1 focus:ring-ring focus:outline-hidden",
             )}
             disabled={mode === "note" ? isDisabled : respostaBarrada}
