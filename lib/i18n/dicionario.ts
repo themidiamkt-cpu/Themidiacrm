@@ -576,6 +576,7 @@ export const DICIONARIO: Traducoes = {
   "Mensagem:": { es: "Mensaje:" },
   "Abrir no Inbox": { es: "Abrir en Inbox" },
   // ─── PROSPECÇÃO: FILTRO POR SITE PRÓPRIO ───
+  "Abre a conversa numa janela ao lado, sem sair desta lista.": { es: "Abre la conversación en una ventana al lado, sin salir de esta lista." },
   "Trazer só empresas sem site próprio": { es: "Traer solo empresas sin sitio propio" },
   "Instagram, Facebook e link de WhatsApp contam como sem site. A Apify cobra pelas empresas analisadas, inclusive as descartadas: aumente o número de empresas para compensar.": { es: "Instagram, Facebook y el enlace de WhatsApp cuentan como sin sitio. Apify cobra por las empresas analizadas, incluso las descartadas: aumenta el número de empresas para compensar." },
   "resultados repetidos, indisponíveis ou com site próprio foram desconsiderados.": { es: "resultados repetidos, no disponibles o con sitio propio fueron descartados." },
