@@ -21,6 +21,8 @@ import {
 import { ProspectingAgentBuilder, type CreatedProspectingAgent } from "./_create-agent";
 import { ContinueManualButton, ManualMessageForm } from "./_manual-message";
 import { temSiteProprio } from "@/lib/prospecting/site-proprio";
+import { filtrarResultados, type FiltroDeSite } from "@/lib/prospecting/filtro-de-resultados";
+import { aproveitarUltimaAbordagem } from "@/lib/prospecting/ultima-abordagem-manual";
 import type { ProspectingAgentSetupInput } from "@/lib/prospecting/agent-setup-schema";
 
 type Campaign = {
@@ -200,13 +202,18 @@ export function ProspectingClient() {
     );
   }
   const candidates = data?.candidates.filter((c) => c.campaign_id === campaign?.id) ?? [];
-  // Filtro da tabela por site próprio. Perfil em rede social e link de WhatsApp
-  // não contam como site — é a mesma regra da preparação da mensagem manual.
-  const [filtroSite, setFiltroSite] = useState<"all" | "without_site" | "with_site">("all");
-  const comSite = candidates.filter((c) => temSiteProprio(c.data.website));
-  const semSite = candidates.filter((c) => !temSiteProprio(c.data.website));
-  const visiveis =
-    filtroSite === "with_site" ? comSite : filtroSite === "without_site" ? semSite : candidates;
+  // Filtros da tabela: por site próprio (perfil em rede social e link de WhatsApp
+  // não contam como site — a mesma regra da preparação da mensagem manual) e por
+  // andamento da abordagem. Os dois se combinam.
+  const [filtroSite, setFiltroSite] = useState<FiltroDeSite>("all");
+  const [filtroAndamento, setFiltroAndamento] = useState<string | null>(null);
+  // O andamento escolhido pode não existir na campanha aberta agora (troca de
+  // campanha, ou a última "Mensagem pronta" foi enviada): aí o filtro não vale.
+  const andamentoAtivo = candidates.some((c) => c.progress === filtroAndamento)
+    ? filtroAndamento
+    : null;
+  const resultados = filtrarResultados(candidates, filtroSite, andamentoAtivo);
+  const visiveis = resultados.visiveis;
   async function perform(body: unknown, message: string) {
     setBusy(true);
     setError(null);
@@ -621,6 +628,11 @@ export function ProspectingClient() {
                             key={campaign.id}
                             campaignId={campaign.id}
                             saved={null}
+                            initial={aproveitarUltimaAbordagem(data.campaigns, {
+                              agents,
+                              channels: data.channels,
+                              stages: data.stages,
+                            })}
                             options={{ agents, channels: data.channels, stages: data.stages }}
                             onChanged={() => query.refetch()}
                           />
@@ -914,30 +926,64 @@ export function ProspectingClient() {
                         "Encontrado é diferente de qualificado. A qualificação depende do que for confirmado na conversa.",
                       )}
                     </p>
-                    <div
-                      className="mt-4 flex flex-wrap gap-2"
-                      role="group"
-                      aria-label={t("Filtrar por site")}
-                    >
-                      {(
-                        [
-                          ["all", t("Todas"), candidates.length],
-                          ["without_site", t("Sem site próprio"), semSite.length],
-                          ["with_site", t("Com site próprio"), comSite.length],
-                        ] as const
-                      ).map(([valor, rotulo, quantas]) => (
-                        <Button
-                          key={valor}
-                          type="button"
-                          size="sm"
-                          variant={filtroSite === valor ? "secondary" : "outline"}
-                          aria-pressed={filtroSite === valor}
-                          onClick={() => setFiltroSite(valor)}
-                          data-testid={`filtro-site-${valor}`}
-                        >
-                          {rotulo} · {quantas}
-                        </Button>
-                      ))}
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <div
+                        className="flex flex-wrap gap-2"
+                        role="group"
+                        aria-label={t("Filtrar por site")}
+                      >
+                        {(
+                          [
+                            ["all", t("Todas"), resultados.total],
+                            ["without_site", t("Sem site próprio"), resultados.semSite],
+                            ["with_site", t("Com site próprio"), resultados.comSite],
+                          ] as const
+                        ).map(([valor, rotulo, quantas]) => {
+                          // "Todas" é a lista sem filtro nenhum: limpa os dois grupos.
+                          const ativo =
+                            valor === "all"
+                              ? filtroSite === "all" && !andamentoAtivo
+                              : filtroSite === valor;
+                          return (
+                            <Button
+                              key={valor}
+                              type="button"
+                              size="sm"
+                              variant={ativo ? "secondary" : "outline"}
+                              aria-pressed={ativo}
+                              onClick={() => {
+                                if (valor === "all") setFiltroAndamento(null);
+                                setFiltroSite(filtroSite === valor ? "all" : valor);
+                              }}
+                              data-testid={`filtro-site-${valor}`}
+                            >
+                              {rotulo} · {quantas}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      <span aria-hidden="true" className="hidden h-6 w-px bg-border sm:block" />
+                      <div
+                        className="flex flex-wrap gap-2"
+                        role="group"
+                        aria-label={t("Filtrar por andamento")}
+                      >
+                        {resultados.andamentos.map(({ valor, quantas }) => (
+                          <Button
+                            key={valor}
+                            type="button"
+                            size="sm"
+                            variant={andamentoAtivo === valor ? "secondary" : "outline"}
+                            aria-pressed={andamentoAtivo === valor}
+                            onClick={() =>
+                              setFiltroAndamento(andamentoAtivo === valor ? null : valor)
+                            }
+                            data-testid={`filtro-andamento-${valor}`}
+                          >
+                            {t(labels[valor] ?? valor)} · {quantas}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                   <div className="overflow-x-auto">

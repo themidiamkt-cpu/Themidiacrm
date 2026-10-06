@@ -49,17 +49,25 @@ type Resultado = { prepared: number; skipped: number; remaining: number; persona
 export function ManualMessageForm({
   campaignId,
   saved,
+  initial = null,
   options,
   onChanged,
 }: {
   campaignId: string;
   /** Configuração já gravada (preparação começada): o formulário fica travado nela. */
   saved: ManualMessageConfig | null;
+  /**
+   * Ponto de partida de uma campanha nova: a última abordagem manual da
+   * organização (`lib/prospecting/ultima-abordagem-manual.ts`). Lido só na
+   * montagem — o que a pessoa digita depois não é sobrescrito por um refetch.
+   */
+  initial?: ManualMessageConfig | null;
   options: Opcoes;
   onChanged: () => Promise<unknown>;
 }) {
   const t = useT();
-  const [draft, setDraft] = useState<ManualMessageConfig>(vazio);
+  const [draft, setDraft] = useState<ManualMessageConfig>(initial ?? vazio);
+  const [aproveitada] = useState(!!initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
@@ -113,6 +121,13 @@ export function ManualMessageForm({
           "Você escreve a mensagem, a IA adapta para cada empresa e deixa pronta no Inbox. Nada é enviado sozinho: quem envia é você, em cada conversa.",
         )}
       </p>
+      {aproveitada && !saved && (
+        <p className="rounded-md border bg-muted/30 p-3 text-sm" data-testid="manual-aproveitada">
+          {t(
+            "Preenchido com a sua última abordagem manual. Revise e altere o que quiser antes de preparar.",
+          )}
+        </p>
+      )}
       {error && (
         <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm">
           {error}

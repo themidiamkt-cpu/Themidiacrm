@@ -77,6 +77,17 @@ interrompida, **Preparar as que faltam** continua de onde parou. Código:
 `lib/prospecting/manual-message.ts` (redação) e `prepareManualCampaign` em
 `lib/prospecting/store.ts`.
 
+Numa campanha nova, o formulário abre **preenchido com a última abordagem manual** da
+organização (mensagem base, conexão, funil, etapas, agente e opções). Conexão que não
+está ativa, etapa ou funil que saíram e agente pausado voltam em branco. Regra em
+`lib/prospecting/ultima-abordagem-manual.ts`.
+
+Em **Acompanhar resultados**, a tabela filtra por site (Todas, Sem site próprio, Com
+site próprio) e por andamento (Mensagem pronta, Abordado, Respondeu e os demais que a
+campanha tiver). Os dois filtros se combinam; a contagem de cada botão respeita o filtro
+do outro grupo, e **Todas** limpa os dois. Regra em
+`lib/prospecting/filtro-de-resultados.ts`.
+
 ### Assistente de voz
 
 O editor do agente oferece **Assistente de voz**, com configuração de ElevenLabs

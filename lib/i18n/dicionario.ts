@@ -590,6 +590,8 @@ export const DICIONARIO: Traducoes = {
   "Tem site próprio": { es: "Tiene sitio propio" },
   "Nenhuma empresa neste filtro.": { es: "Ninguna empresa en este filtro." },
   "Link do perfil (rede social)": { es: "Enlace del perfil (red social)" },
+  "Filtrar por andamento": { es: "Filtrar por avance" },
+  "Preenchido com a sua última abordagem manual. Revise e altere o que quiser antes de preparar.": { es: "Completado con tu último contacto manual. Revisa y cambia lo que quieras antes de preparar." },
   // ─── FOLLOW-UP: PESSOAS EM CADA PASSO DO FLUXO (construtor) ───
   "Pessoas no fluxo": { es: "Personas en el flujo" },
   "Pessoas neste passo": { es: "Personas en este paso" },
