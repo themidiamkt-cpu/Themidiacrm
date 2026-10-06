@@ -28,6 +28,8 @@ const vazio: ManualMessageConfig = {
   pipeline_id: "",
   stage_id: "",
   agent_id: null,
+  sent_stage_id: null,
+  replied_stage_id: null,
   base_message: "",
   personalize: true,
   only_without_site: false,
@@ -173,7 +175,13 @@ export function ManualMessageForm({
               value={config.pipeline_id}
               required
               onChange={(e) =>
-                setDraft((c) => ({ ...c, pipeline_id: e.target.value, stage_id: "" }))
+                setDraft((c) => ({
+                  ...c,
+                  pipeline_id: e.target.value,
+                  stage_id: "",
+                  sent_stage_id: null,
+                  replied_stage_id: null,
+                }))
               }
             >
               <option value="">{t("Escolha o funil")}</option>
@@ -204,6 +212,38 @@ export function ManualMessageForm({
             </select>
           </div>
         </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {(
+            [
+              ["sent_stage_id", t("Etapa depois que você enviar")],
+              ["replied_stage_id", t("Etapa quando a empresa responder")],
+            ] as const
+          ).map(([campo, rotulo]) => (
+            <div key={campo}>
+              <Label htmlFor={`manual-${campo}`}>{rotulo}</Label>
+              <select
+                id={`manual-${campo}`}
+                className={`${selectClass} mt-1`}
+                value={config[campo] ?? ""}
+                onChange={(e) => set(campo, e.target.value || null)}
+              >
+                <option value="">{t("Automático (pelo funil)")}</option>
+                {options.stages
+                  .filter((s) => s.pipeline_id === config.pipeline_id)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          ))}
+        </div>
+        <p className="-mt-2 text-xs text-muted-foreground">
+          {t(
+            "O cartão anda sozinho: vai para a etapa de enviado quando você manda a mensagem e para a de resposta quando a empresa responde. Saudação automática não conta como resposta.",
+          )}
+        </p>
         <div>
           <Label htmlFor="manual-message">{t("Mensagem base")}</Label>
           <Textarea

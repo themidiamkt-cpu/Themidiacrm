@@ -5,6 +5,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { tickProspecting } from "@/lib/prospecting/worker";
+import { sincronizarFunilDaAbordagem } from "@/lib/prospecting/manual-sync";
 import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,22 @@ async function handle(req: NextRequest) {
   if (!autorizaCron(req))
     return fail("forbidden", "Credencial de execução inválida.", 403, { requestId });
   try {
-    return ok(await tickProspecting(getRequestPool(), createAdminClient()), { requestId });
+    const pool = getRequestPool();
+    const admin = createAdminClient();
+    const tick = await tickProspecting(pool, admin);
+    // O funil acompanha o que a conversa mostra (envio e resposta). Falha aqui
+    // não derruba a fila: a rodada seguinte tenta de novo.
+    let funil: Awaited<ReturnType<typeof sincronizarFunilDaAbordagem>> | { erro: string };
+    try {
+      funil = await sincronizarFunilDaAbordagem(pool, admin);
+    } catch (err) {
+      funil = { erro: err instanceof Error ? err.message : String(err) };
+      logger.error("[prospecting.cron] sincronia do funil lançou", {
+        error: funil.erro,
+        requestId,
+      });
+    }
+    return ok({ ...(tick as Record<string, unknown>), funil }, { requestId });
   } catch (err) {
     // O `catch` era SEM PARÂMETRO: o objeto do erro não ficava de fora do log,
     // ele era DESCARTADO — não existia em variável nenhuma. Num cron, que roda

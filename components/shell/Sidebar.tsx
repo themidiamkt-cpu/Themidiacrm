@@ -400,6 +400,12 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
         "sticky top-0 z-30 flex h-screen shrink-0 flex-col border-r bg-card transition-[width] duration-200",
         collapsed ? "w-16" : "w-60",
       )}
+      // Barra lateral sempre escura, com a página no tema que a pessoa escolheu:
+      // `data-theme="dark"` faz a subárvore ler os tokens do escuro (o produto já
+      // sabe aninhar temas), e `data-barra-lateral` é onde `globals.css` pinta o
+      // preto e o degradê do item ativo.
+      data-theme="dark"
+      data-barra-lateral=""
     >
       <SidebarContent collapsed={collapsed} />
     </aside>

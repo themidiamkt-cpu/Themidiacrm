@@ -576,6 +576,10 @@ export const DICIONARIO: Traducoes = {
   "Mensagem:": { es: "Mensaje:" },
   "Abrir no Inbox": { es: "Abrir en Inbox" },
   // ─── PROSPECÇÃO: FILTRO POR SITE PRÓPRIO ───
+  "Etapa depois que você enviar": { es: "Etapa después de que envíes" },
+  "Etapa quando a empresa responder": { es: "Etapa cuando la empresa responda" },
+  "Automático (pelo funil)": { es: "Automático (según el embudo)" },
+  "O cartão anda sozinho: vai para a etapa de enviado quando você manda a mensagem e para a de resposta quando a empresa responde. Saudação automática não conta como resposta.": { es: "La tarjeta avanza sola: pasa a la etapa de enviado cuando mandas el mensaje y a la de respuesta cuando la empresa responde. El saludo automático no cuenta como respuesta." },
   "Abre a conversa numa janela ao lado, sem sair desta lista.": { es: "Abre la conversación en una ventana al lado, sin salir de esta lista." },
   "Trazer só empresas sem site próprio": { es: "Traer solo empresas sin sitio propio" },
   "Instagram, Facebook e link de WhatsApp contam como sem site. A Apify cobra pelas empresas analisadas, inclusive as descartadas: aumente o número de empresas para compensar.": { es: "Instagram, Facebook y el enlace de WhatsApp cuentan como sin sitio. Apify cobra por las empresas analizadas, incluso las descartadas: aumenta el número de empresas para compensar." },

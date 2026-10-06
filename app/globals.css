@@ -964,3 +964,37 @@
     transform: none;
   }
 }
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   BARRA LATERAL ESCURA COM ITEM ATIVO EM DEGRADÊ (tema desta instalação).
+
+   A barra carrega `data-theme="dark"` (lê os tokens do escuro) e
+   `data-barra-lateral`. Aqui só se troca o que o escuro do produto não dá:
+   fundo preto puro em vez do cinza-quente, texto de menu cinza-claro, e o
+   item da página atual em degradê. Os tokens são redeclarados NO elemento,
+   então tudo o que está dentro (bordas, hover, logo, selo de versão) acompanha
+   sem regra própria.
+   ───────────────────────────────────────────────────────────────────────── */
+[data-barra-lateral] {
+  --color-bg: #000000;
+  --color-surface: #000000;
+  --color-surface-elevated: #161616;
+  --color-border: #1f1f1f;
+  --color-text: #ffffff;
+  --color-text-muted: #b2b2b2;
+  --barra-lateral-ativo-de: #e9177d;
+  --barra-lateral-ativo-ate: #f07556;
+  background-color: #000000;
+  color: #ffffff;
+}
+
+[data-barra-lateral] a[aria-current="page"] {
+  background-color: var(--barra-lateral-ativo-de);
+  background-image: linear-gradient(
+    90deg,
+    var(--barra-lateral-ativo-de) 0%,
+    var(--barra-lateral-ativo-ate) 100%
+  );
+  color: #ffffff;
+}

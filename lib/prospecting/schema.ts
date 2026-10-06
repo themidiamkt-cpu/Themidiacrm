@@ -30,6 +30,12 @@ export const manualMessageConfigSchema = z
     pipeline_id: z.string().uuid(),
     stage_id: z.string().uuid(),
     agent_id: z.string().uuid().nullable().default(null),
+    /**
+     * Para onde o negócio vai quando a mensagem é enviada e quando a empresa
+     * responde. Vazias, a sincronia resolve pelo funil (`manual-sync.ts`).
+     */
+    sent_stage_id: z.string().uuid().nullable().default(null),
+    replied_stage_id: z.string().uuid().nullable().default(null),
     base_message: z.string().trim().min(10).max(2000),
     personalize: z.boolean().default(true),
     only_without_site: z.boolean().default(false),
