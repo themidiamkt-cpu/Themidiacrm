@@ -21,3 +21,11 @@ A empresa também altera só apresentação: papel continua decidindo página, A
 Alterações emitem `team.interface_changed` para `api_audit_log`, disponível na Auditoria. Não há evento sem consumidor nem worker novo. O ciclo de correção é o administrador rever e salvar pela Equipe; erros de escrita ficam visíveis e não produzem sucesso otimista. Esta peça não decide atendimento ou follow-up: continuidade IA↔humano permanece nos links contextuais e permissões operacionais existentes.
 
 Provas: `tests/unit/interface-por-vinculo.test.ts`, `tests/invariants/interface-por-vinculo.test.ts` e `tests/e2e/interface-por-vinculo.spec.ts`. A spec dirige dois membros com mesmo papel, edição por outro administrador, recebimento real pelo socket, formulário preservado, hub-only, busca/mobile e convite/replay. Evidências locais em `.superpowers/evidence/comunidade-360/`. O degrau da empresa é medido por `tests/unit/interface-por-empresa.test.ts`, que conta os itens do menu pelo módulo que importa o catálogo (`tests/e2e/navegacao.spec.ts:222` segue medindo a dobra na tela).
+
+## O que fica fixo na barra lateral
+
+`interface_settings` aceita também `barra`: a lista das áreas que ficam fixas na barra lateral. É uma pergunta diferente de `destinos`. `destinos` decide o que existe na navegação (barra, página do grupo e busca); `barra` decide só o que sobe para a barra. O que não sobe continua na página do grupo ("Ver tudo em …") e na busca. Ausente, vale o padrão do catálogo (`sidebar: true`). Lista vazia é escolha válida.
+
+A lista aparece no mesmo editor, em "Escolher o que fica na barra lateral", tanto na empresa quanto no vínculo. Ao contrário de `destinos`, `barra` não é interseção: vale a da pessoa e, na falta dela, a da empresa. Fixar não dá acesso: a barra só desenha o que papel e `destinos` já deixam ver. O grupo do rodapé (Configurações) fica de fora, porque a barra o desenha como um link só.
+
+Não há migration: os shape checks das três tabelas só olham `preset` e `destinos`, e uma versão que não conhece `barra` lê `{preset, destinos}` e ignora o resto. Regra em `fixoNaBarra` (`lib/navigation/interface.ts`), usada pela barra e pelo editor. Provas: `tests/unit/barra-lateral-escolhida.test.ts` e `tests/unit/barra-lateral-editor.test.tsx`.

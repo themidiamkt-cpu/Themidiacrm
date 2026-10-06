@@ -3,7 +3,13 @@ import { z } from "zod";
 import { ROLE_RANK, type Role } from "@/lib/auth/types";
 import type { ModuloOpcional } from "@/lib/instalacao/modulos";
 import type { CapacidadeDaOrganizacao } from "@/lib/organizacao/capacidades";
-import { NAV_CATALOG, type NavMetadata, type NavDestinationId } from "./catalogo";
+import {
+  GRUPO_NO_RODAPE,
+  NAV_CATALOG,
+  NAV_GROUPS,
+  type NavMetadata,
+  type NavDestinationId,
+} from "./catalogo";
 
 const ids = NAV_CATALOG.map((d) => d.href);
 export const interfaceSettingsSchema = z
@@ -12,6 +18,20 @@ export const interfaceSettingsSchema = z
     destinos: z
       .array(z.enum(ids as [NavDestinationId, ...NavDestinationId[]]))
       .min(1)
+      .max(ids.length)
+      .transform((values) => ids.filter((id) => values.includes(id)))
+      .optional(),
+    /**
+     * O que fica FIXO na barra lateral. Ausente = o padrão do catálogo
+     * (`sidebar: true`). Lista vazia é escolha válida: a barra fica só com os
+     * links "Ver tudo em …" e Configurações.
+     *
+     * É uma pergunta diferente de `destinos`: aquela decide o que EXISTE na
+     * navegação (barra, página do grupo e busca); esta só decide o que sobe
+     * para a barra. O que não sobe continua na página do grupo e na busca.
+     */
+    barra: z
+      .array(z.enum(ids as [NavDestinationId, ...NavDestinationId[]]))
       .max(ids.length)
       .transform((values) => ids.filter((id) => values.includes(id)))
       .optional(),
@@ -94,9 +114,15 @@ export function lerInterface(raw: unknown): {
   const destinos = Array.isArray(value.destinos)
     ? ids.filter((id) => (value.destinos as unknown[]).includes(id))
     : undefined;
+  // `barra` tolera área antiga do mesmo jeito que `destinos`, mas sem pedir
+  // ajuste: uma área que saiu do catálogo só some da barra.
+  const barra = Array.isArray(value.barra)
+    ? ids.filter((id) => (value.barra as unknown[]).includes(id))
+    : undefined;
   const parsed = interfaceSettingsSchema.safeParse({
     preset: value.preset,
     ...(destinos ? { destinos } : {}),
+    ...(barra ? { barra } : {}),
   });
   if (!parsed.success) return { settings: INTERFACE_COMPLETA, needsAdjustment: true };
   return {
@@ -174,11 +200,48 @@ const SO_O_ESSENCIAL: readonly NavDestinationId[] = ids.filter((id) =>
  * falha ABERTA, exatamente o oposto do pretendido aqui.
  */
 export function combinarInterfaces(daEmpresa: unknown, doVinculo: unknown): InterfaceSettings {
-  const empresa = conjuntoEscolhido(lerInterface(daEmpresa).settings);
-  const vinculo = conjuntoEscolhido(lerInterface(doVinculo).settings);
-  if (!empresa && !vinculo) return INTERFACE_COMPLETA;
+  const daEmpresaLida = lerInterface(daEmpresa).settings;
+  const doVinculoLida = lerInterface(doVinculo).settings;
+  const empresa = conjuntoEscolhido(daEmpresaLida);
+  const vinculo = conjuntoEscolhido(doVinculoLida);
+  // A barra NÃO é interseção: é arrumação, não limite. Vale a escolha da pessoa
+  // e, na falta dela, a da empresa. O que cada um pode ver já foi decidido pela
+  // interseção acima — fixar na barra uma área fora dela não a faz aparecer.
+  const escolhaDaBarra = doVinculoLida.barra ?? daEmpresaLida.barra;
+  const barra = escolhaDaBarra ? { barra: [...escolhaDaBarra] } : {};
+  if (!empresa && !vinculo) return escolhaDaBarra ? { preset: "completa", ...barra } : INTERFACE_COMPLETA;
   const soUm = empresa ?? vinculo;
-  if (!empresa || !vinculo) return { preset: "completa", destinos: [...(soUm as readonly NavDestinationId[])] };
+  if (!empresa || !vinculo)
+    return { preset: "completa", destinos: [...(soUm as readonly NavDestinationId[])], ...barra };
   const comuns = empresa.filter((id) => vinculo.includes(id));
-  return { preset: "completa", destinos: [...(comuns.length > 0 ? comuns : SO_O_ESSENCIAL)] };
+  return {
+    preset: "completa",
+    destinos: [...(comuns.length > 0 ? comuns : SO_O_ESSENCIAL)],
+    ...barra,
+  };
+}
+
+const GRUPOS_COM_HUB: ReadonlySet<string> = new Set(
+  NAV_GROUPS.filter((g) => g.hub).map((g) => g.id),
+);
+
+/** Áreas que podem ser fixadas: tudo menos o grupo do rodapé, que a barra desenha como um link só. */
+export function podeIrParaABarra(d: Pick<NavMetadata, "group">): boolean {
+  return d.group !== GRUPO_NO_RODAPE;
+}
+
+/**
+ * Esta área fica fixa na barra lateral?
+ *
+ * Com `barra` escolhida, vale a lista. Sem ela, vale o padrão de sempre: o que o
+ * catálogo marca como uso diário e, nos grupos sem página "Ver tudo", todas as
+ * áreas de uma seleção personalizada (senão elas não teriam por onde abrir).
+ * Regra única: a barra desenha por ela e o editor parte dela.
+ */
+export function fixoNaBarra(
+  d: Pick<NavMetadata, "href" | "group" | "sidebar">,
+  settings: InterfaceSettings | undefined,
+): boolean {
+  if (settings?.barra) return (settings.barra as readonly string[]).includes(d.href);
+  return !!d.sidebar || (!GRUPOS_COM_HUB.has(d.group) && !!settings?.destinos);
 }

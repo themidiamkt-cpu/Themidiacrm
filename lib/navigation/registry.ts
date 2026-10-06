@@ -53,7 +53,7 @@ import {
 import type { ModuloOpcional } from "@/lib/instalacao/modulos";
 import type { CapacidadeDaOrganizacao } from "@/lib/organizacao/capacidades";
 
-import { destinosDaInterface, type InterfaceSettings } from "./interface";
+import { destinosDaInterface, fixoNaBarra, type InterfaceSettings } from "./interface";
 export { NAV_GROUPS, GRUPO_NO_RODAPE } from "./catalogo";
 export type { NavGroup, NavGroupId } from "./catalogo";
 const ICONS = {
@@ -127,7 +127,7 @@ export function sidebarGroups(
   return NAV_GROUPS.map((group) => ({
     group,
     items: NAV_DESTINATIONS.filter(
-      (d) => d.group === group.id && (d.sidebar || (!group.hub && !!settings?.destinos)) && visible.has(d.href),
+      (d) => d.group === group.id && fixoNaBarra(d, settings) && visible.has(d.href),
     ),
   })).filter(
     (g) =>
