@@ -620,7 +620,7 @@ export const DICIONARIO: Traducoes = {
   "Você escreve a mensagem, a IA adapta para cada empresa e deixa pronta no Inbox. Nada é enviado sozinho: quem envia é você, em cada conversa.": { es: "Tú escribes el mensaje, la IA lo adapta a cada empresa y lo deja listo en Inbox. Nada se envía solo: quien envía eres tú, en cada conversación." },
   "Agente que continua a conversa (opcional)": { es: "Agente que continúa la conversación (opcional)" },
   "Nenhum: eu mesmo respondo": { es: "Ninguno: respondo yo" },
-  "Depois de enviar, devolva a conversa para a IA no Inbox para o agente atender a resposta.": { es: "Después de enviar, devuelve la conversación a la IA en Inbox para que el agente atienda la respuesta." },
+  "Depois que você envia a primeira mensagem, a conversa volta sozinha para este agente, que atende a resposta. Se você escrever de novo na conversa, ela fica com você.": { es: "Después de que envías el primer mensaje, la conversación vuelve sola a este agente, que atiende la respuesta. Si escribes de nuevo en la conversación, queda contigo." },
   "Mensagem base": { es: "Mensaje base" },
   "Escreva a primeira mensagem como você mandaria. Ex.: Oi! Aqui é da minha empresa. Encontrei a {{empresa}} no Google e queria entender como vocês atraem clientes hoje.": { es: "Escribe el primer mensaje como tú lo enviarías. Ej.: ¡Hola! Te escribo de mi empresa. Encontré a {{empresa}} en Google y quería entender cómo atraen clientes hoy." },
   "Marcadores aceitos: {{empresa}}, {{bairro}}, {{categoria}}, {{nota}} e {{avaliacoes}}. O aviso para parar de receber mensagens é acrescentado no fim.": { es: "Marcadores aceptados: {{empresa}}, {{bairro}}, {{categoria}}, {{nota}} y {{avaliacoes}}. El aviso para dejar de recibir mensajes se agrega al final." },

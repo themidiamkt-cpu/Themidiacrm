@@ -12,6 +12,13 @@ vi.mock("@/app/api/v1/messages/_handler", () => ({ sendMessageHandler: vi.fn() }
 vi.mock("@/lib/inbox/atividade-de-comando", () => ({
   registrarTrocaDeComando: vi.fn(async () => undefined),
 }));
+// A rota também pergunta se o envio é a abertura de uma prospecção manual
+// (`lib/prospecting/abertura-manual.ts`). Aqui a resposta é sempre "não": este
+// arquivo mede a resposta humana comum. O caso da abertura tem arquivo próprio,
+// `abertura-de-prospeccao-volta-para-o-agente.test.ts`.
+vi.mock("@/lib/prospecting/abertura-manual", () => ({
+  agenteDaAberturaManual: vi.fn(async () => null),
+}));
 
 const organizationId = "22222222-2222-4222-8222-222222222222";
 const conversationId = "44444444-4444-4444-8444-444444444444";

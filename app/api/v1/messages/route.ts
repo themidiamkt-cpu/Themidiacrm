@@ -25,12 +25,21 @@ import {
 } from "@/lib/messaging/ritmo-do-envio-por-token";
 import { sendMessageSchema, validateRequest, type SendMessageInput } from "@/lib/schemas";
 import { conversaFicaComQuemAtendeu } from "@/lib/schemas/routing";
+import { agenteDaAberturaManual } from "@/lib/prospecting/abertura-manual";
+import { devolverAtendimentoAoAgente } from "@/lib/escalacao/retomada";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Message } from "@/lib/types/messaging";
 
 import { sendMessageHandler } from "./_handler";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Teto de espera pela leitura da abertura de prospecção. A leitura corre em
+ * paralelo com o envio e quase sempre termina antes dele; o teto existe para o
+ * dia em que o banco demora, e a resposta do envio não pode ficar presa nisso.
+ */
+const PRAZO_DA_LEITURA_DA_ABERTURA_MS = 4_000;
 
 /**
  * Tag do endpoint no recibo de idempotência (#1613, item A). Muda de rota muda
@@ -228,6 +237,34 @@ export async function POST(req: NextRequest): Promise<Response> {
         })
       : null;
 
+    // Abertura de prospecção manual: a primeira mensagem de uma abordagem cuja
+    // campanha tem agente no ar não é "uma pessoa atendendo" — quem atende a
+    // resposta é o agente. Regra e porquê em `lib/prospecting/abertura-manual.ts`.
+    //
+    // A leitura é DISPARADA antes do envio (depende de a conversa ainda não ter
+    // saída) e só é esperada depois dele: o envio não fica mais lento por isto.
+    // Erro ou demora na leitura valem "não é abertura" — o caminho de sempre.
+    const leituraDaAbertura: Promise<string | null> =
+      authz.via === "session" && actor.type === "user"
+        ? Promise.race([
+            Promise.resolve()
+              .then(() =>
+                agenteDaAberturaManual(
+                  createAdminClient(),
+                  organizationId,
+                  (input as SendMessageInput).conversation_id,
+                ),
+              )
+              .catch((erroDaLeitura: unknown) => {
+                console.error("[messages.send] leitura da abertura de prospecção falhou", erroDaLeitura);
+                return null;
+              }),
+            new Promise<null>((resolver) => {
+              setTimeout(() => resolver(null), PRAZO_DA_LEITURA_DA_ABERTURA_MS);
+            }),
+          ])
+        : Promise.resolve(null);
+
     const message = await sendMessageHandler(
       supabase,
       {
@@ -248,7 +285,32 @@ export async function POST(req: NextRequest): Promise<Response> {
     // tomamos a conversa dele. O envio já pode ter sido aceito pelo canal,
     // portanto falha do claim nunca vira erro de envio (o operador poderia
     // reenviar e duplicar a mensagem).
-    if (authz.via === "session" && actor.type === "user" && message.status !== "failed") {
+    // A abertura volta para o agente pela MESMA função do botão "Devolver ao
+    // automático": solta as travas, autoriza o contato para a IA e deixa o rastro
+    // na linha do tempo. Se a devolução não acontecer, vale o caminho de sempre
+    // logo abaixo — a conversa nunca fica sem dono.
+    const agenteDaAbertura = await leituraDaAbertura;
+    let devolvidaAoAgente = false;
+    if (agenteDaAbertura && actor.type === "user" && message.status !== "failed") {
+      try {
+        const devolucao = await devolverAtendimentoAoAgente(
+          { supabase, organizationId, actor, requestId },
+          { conversationId: message.conversation_id },
+        );
+        devolvidaAoAgente = devolucao.ok;
+        if (!devolucao.ok) {
+          console.error("[messages.send] abertura não voltou para o agente", devolucao.erro);
+        }
+      } catch (erroDaDevolucao) {
+        console.error("[messages.send] abertura não voltou para o agente", erroDaDevolucao);
+      }
+    }
+    if (
+      !devolvidaAoAgente &&
+      authz.via === "session" &&
+      actor.type === "user" &&
+      message.status !== "failed"
+    ) {
       try {
         const { data: org, error: orgError } = await supabase
           .from("organizations")

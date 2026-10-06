@@ -176,7 +176,7 @@ export function ManualMessageForm({
             </select>
             <p className="mt-1 text-xs text-muted-foreground">
               {t(
-                "Depois de enviar, devolva a conversa para a IA no Inbox para o agente atender a resposta.",
+                "Depois que você envia a primeira mensagem, a conversa volta sozinha para este agente, que atende a resposta. Se você escrever de novo na conversa, ela fica com você.",
               )}
             </p>
           </div>

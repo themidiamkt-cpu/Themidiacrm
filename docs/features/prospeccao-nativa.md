@@ -77,6 +77,15 @@ interrompida, **Preparar as que faltam** continua de onde parou. Código:
 `lib/prospecting/manual-message.ts` (redação) e `prepareManualCampaign` em
 `lib/prospecting/store.ts`.
 
+Quando a campanha tem agente, **a primeira mensagem enviada devolve a conversa ao
+agente**: o envio pelo Inbox normalmente cala a IA (e, onde a empresa ligou "a conversa
+fica com quem atendeu", assume a conversa), mas a abertura da prospecção não é uma pessoa
+atendendo. A rota de envio chama `devolverAtendimentoAoAgente`, a mesma regra do botão
+"Devolver ao automático", que também autoriza o contato para a IA. Só a primeira saída da
+conversa conta; da segunda em diante vale a regra de sempre. Sem agente, ou com o agente
+pausado ou despublicado, nada muda. Regra em `lib/prospecting/abertura-manual.ts`; a
+leitura corre em paralelo com o envio, com teto de 4 s, e erro nela cai no caminho comum.
+
 Numa campanha nova, o formulário abre **preenchido com a última abordagem manual** da
 organização (mensagem base, conexão, funil, etapas, agente e opções). Conexão que não
 está ativa, etapa ou funil que saíram e agente pausado voltam em branco. Regra em
