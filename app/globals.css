@@ -985,8 +985,26 @@
   --color-text-muted: #b2b2b2;
   --barra-lateral-ativo-de: #e9177d;
   --barra-lateral-ativo-ate: #f07556;
+  /* O escuro do produto redeclara a rampa da cor de destaque em verde, e a cor
+     da marca só chega ao escuro quando a tela INTEIRA está no escuro
+     (`:root:root[data-theme="dark"]`, em lib/branding/css.ts). Sem as paradas
+     abaixo, o hover, o anel de foco e o selo de versão da barra ficavam verdes
+     mesmo com a marca em rosa. É a rampa do rosa do degradê; `--color-accent`,
+     `--primary` e `--ring` do escuro apontam para as paradas 300 a 500 e
+     acompanham sozinhos. */
+  --color-accent-300: #ffa1be;
+  --color-accent-400: #ff77a6;
+  --color-accent-500: #ff4291;
+  --color-accent-600: #e9177d;
+  --color-accent-soft: rgba(233, 23, 125, 0.16);
   background-color: #000000;
   color: #ffffff;
+}
+
+/* Hover dos itens: o utilitário pinta a cor de destaque a 50%, que sobre o
+   preto fica um rosa pesado. Aqui vale um véu leve do rosa do degradê. */
+[data-barra-lateral] .hover\:bg-accent\/50:hover {
+  background-color: rgba(233, 23, 125, 0.22);
 }
 
 [data-barra-lateral] a[aria-current="page"] {
