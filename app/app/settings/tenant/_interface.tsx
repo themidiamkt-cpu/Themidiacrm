@@ -16,6 +16,8 @@ interface Props {
   initial: unknown;
   /** Papel de quem edita: limita as opções ao que este papel enxerga. */
   role: Role;
+  /** Na página própria do menu, a lista da barra já abre: é o que se veio fazer ali. */
+  barraAberta?: boolean;
 }
 
 /**
@@ -23,7 +25,7 @@ interface Props {
  * Reusa o mesmo editor da escolha por vínculo de propósito: é a mesma pergunta
  * num nível acima, e duas telas com a mesma semântica divergem com o tempo.
  */
-export function InterfaceDaEmpresaForm({ initial, role }: Props) {
+export function InterfaceDaEmpresaForm({ initial, role, barraAberta = false }: Props) {
   const t = useT();
   const [value, setValue] = useState<InterfaceSettings>(() => lerInterface(initial).settings);
   const [isPending, startTransition] = useTransition();
@@ -52,6 +54,7 @@ export function InterfaceDaEmpresaForm({ initial, role }: Props) {
         onChange={setValue}
         role={role}
         disabled={isPending}
+        barraAberta={barraAberta}
       />
       <Button type="button" size="sm" disabled={isPending} onClick={salvar}>
         {t("Aplicar interface")}

@@ -1182,6 +1182,7 @@ export const DICIONARIO: Traducoes = {
   "Escolher o que fica na barra lateral": { es: "Elegir qué queda en la barra lateral" },
   "Marque as áreas que ficam fixas na barra. As desmarcadas continuam na busca e, nos grupos com “Ver tudo”, na página do grupo.": { es: "Marca las áreas que quedan fijas en la barra. Las desmarcadas siguen en la búsqueda y, en los grupos con “Ver todo”, en la página del grupo." },
   "Voltar ao padrão da barra": { es: "Volver al estándar de la barra" },
+  "Escolha o que aparece na navegação e o que fica fixo na barra lateral.": { es: "Elige qué aparece en la navegación y qué queda fijo en la barra lateral." },
   " (personalizada)": { es: " (personalizada)" },
   "Selecione ao menos uma área de trabalho permitida ao papel.": { es: "Selecciona al menos un área de trabajo permitida para el rol." },
   "Interface atualizada.": { es: "Interfaz actualizada." },

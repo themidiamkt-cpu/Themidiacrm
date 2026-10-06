@@ -917,6 +917,18 @@ export const NAV_CATALOG = [
     minRole: "admin",
   },
   {
+    // O formulário é o mesmo que mora em Organização. Ganhou porta própria
+    // porque ninguém procura "o que aparece na barra" atrás de um cartão que
+    // promete dados da empresa e LGPD.
+    href: "/app/settings/menu",
+    label: "Menu lateral",
+    description: "Escolha o que aparece na navegação e o que fica fixo na barra lateral.",
+    icon: "Signpost",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "admin",
+  },
+  {
     // Mora em Organização e não em Canais de propósito: o que se configura aqui
     // é a CONTA DE ANÚNCIOS da empresa — dinheiro e identidade comercial, ao lado
     // de billing e API tokens. Canais é por onde se FALA com o cliente, e os dois

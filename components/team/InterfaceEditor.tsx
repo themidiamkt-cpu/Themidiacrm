@@ -20,11 +20,14 @@ export function InterfaceEditor({
   onChange,
   role,
   disabled = false,
+  barraAberta = false,
 }: {
   value: InterfaceSettings;
   onChange: (value: InterfaceSettings) => void;
   role: Role;
   disabled?: boolean;
+  /** Abre a lista "o que fica na barra lateral" já expandida. */
+  barraAberta?: boolean;
 }) {
   const t = useT();
   const id = useId();
@@ -105,7 +108,7 @@ export function InterfaceEditor({
           })}
         </div>
       </details>
-      <details data-testid="barra-lateral-escolha">
+      <details data-testid="barra-lateral-escolha" open={barraAberta || undefined}>
         <summary className="cursor-pointer text-sm font-medium">
           {t("Escolher o que fica na barra lateral")}{value.barra ? t(" (personalizada)") : ""}
         </summary>
