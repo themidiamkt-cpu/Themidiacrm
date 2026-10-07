@@ -127,6 +127,30 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     return fail("not_found", t("Router não encontrado."), 404, { requestId });
   }
 
+  // `config.ad_origin_agent_id` (agente de quem chegou por anúncio) mora no
+  // jsonb, sem chave estrangeira: a conferência que a coluna `fallback_agent_id`
+  // ganha do banco tem de ser feita aqui. O agente precisa existir NESTA
+  // organização — o id vem do corpo, a organização nunca.
+  const agenteDaOrigem = patch.config?.ad_origin_agent_id;
+  if (agenteDaOrigem !== undefined && agenteDaOrigem !== null) {
+    if (typeof agenteDaOrigem !== "string" || !UUID_RX.test(agenteDaOrigem)) {
+      return fail("validation_failed", t("Campos inválidos."), 422, { requestId });
+    }
+    const { data: agente, error: agenteErr } = await admin
+      .from("ai_agents")
+      .select("id")
+      .eq("id", agenteDaOrigem)
+      .eq("organization_id", org.orgId)
+      .is("archived_at", null)
+      .maybeSingle();
+    if (agenteErr) {
+      return fail("internal_error", "Erro ao conferir o agente.", 500, { requestId });
+    }
+    if (!agente) {
+      return fail("validation_failed", t("Campos inválidos."), 422, { requestId });
+    }
+  }
+
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) update.name = patch.name;
   if (patch.is_active !== undefined) update.is_active = patch.is_active;

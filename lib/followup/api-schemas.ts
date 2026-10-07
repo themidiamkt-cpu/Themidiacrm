@@ -37,7 +37,9 @@ export const triggerConfigSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("webhook"), ...CANCEL_ON_REPLY }),
   z.strictObject({
     kind: z.literal("lead_created"),
-    params: z.strictObject({}).optional(),
+    // `origem: "anuncio"` = só entra quem chegou por anúncio online
+    // (`lib/leads/veio-de-anuncio.ts`). Ausente = todo lead novo, como sempre.
+    params: z.strictObject({ origem: z.literal("anuncio").optional() }).optional(),
     ...CANCEL_ON_REPLY,
   }),
   z.strictObject({

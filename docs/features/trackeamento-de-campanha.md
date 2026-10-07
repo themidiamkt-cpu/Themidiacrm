@@ -72,6 +72,24 @@ Primeiro que existir vence, da esquerda para a direita:
 
 Linha sem valor não aparece: um travessão em cinco linhas seguidas lê como defeito de cadastro, não como "este contato não veio de anúncio".
 
+## O que a origem decide
+
+A origem de anúncio não é só informação na ficha. Duas regras a leem, pela mesma função
+(`lib/leads/veio-de-anuncio.ts`): clique para o WhatsApp e clique do Google contam sempre;
+origem de site só conta com sinal de mídia paga (`gclid`, campanha, conjunto ou anúncio
+nomeados, ou `utm_medium` de mídia paga).
+
+- **Quem atende.** No roteador, "Quem chega por anúncio online" escolhe o agente dessas
+  pessoas (`ai_routers.config.ad_origin_agent_id`). A decisão acontece em
+  `resolve-turn-agent.ts`, abaixo da campanha que criou a conversa e acima do classificador
+  de assunto, sem gastar o classificador. Vale por 30 dias desde a criação do contato
+  (`DIAS_DA_ORIGEM`, em `lib/agent-engine/agent/agente-da-origem.ts`); depois a conversa
+  volta para a régua comum. Agente sem versão publicada, erro ou banco lento: segue pela
+  régua comum.
+- **Qual follow-up começa.** O gatilho "Lead criado" aceita `params.origem: "anuncio"`: o
+  fluxo só inscreve quem chegou por anúncio (`lib/followup/gatilho-lead.ts`, contado em
+  `fora_da_origem` quando o contato fica de fora).
+
 ## Limites declarados
 
 - **A origem vale só na PRIMEIRA mensagem do contato, e não sobrescreve o primeiro toque.** Testar com um número que já é contato antigo não estampa nada — parece defeito, é a regra funcionando. Quem chegou de anúncio pago primeiro mantém o anúncio pago; quem chegou do site primeiro mantém o site.

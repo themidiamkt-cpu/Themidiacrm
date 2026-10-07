@@ -64,6 +64,7 @@ import type { DependenciasDoPonto } from '@/lib/ai/decisao/ponto';
 import type { Logger } from '../obs/logger';
 import type { LlmEdgeConfig } from '../edge/llm/run-model-call';
 import { agenteDaCampanhaDaConversa } from './agente-da-campanha';
+import { contatoDaConversaVeioDeAnuncio } from './agente-da-origem';
 import { loadActiveRouter, type LoadedRouter, type RouterMember } from './router-config';
 import {
   loadPublishedAgentConfig,
@@ -95,7 +96,9 @@ export interface TurnAgentResolution {
     | 'no_match'
     | 'classifier_failed'
     /** A conversa nasceu de uma campanha que declarou agente (migration 0267). */
-    | 'campanha';
+    | 'campanha'
+    /** O contato chegou por anúncio e o roteador declarou quem atende essa origem. */
+    | 'origem';
   /**
    * Fluxo de atendimento que o membro casado aponta (migration 0394; 0237 na branch do autor). O turno
    * começa o fluxo para o contato; `null` = nenhum. Só rótulos casados o trazem
@@ -108,6 +111,8 @@ export interface ResolveTurnAgentDeps {
   log: Logger;
   /** Injetável para o teste não precisar de banco. */
   agenteDaCampanha?: typeof agenteDaCampanhaDaConversa;
+  /** Injetável para o teste não precisar de banco. */
+  veioDeAnuncio?: typeof contatoDaConversaVeioDeAnuncio;
   loadActiveRouter?: typeof loadActiveRouter;
   loadPublishedAgentConfigById?: typeof loadPublishedAgentConfigById;
   loadPublishedAgentConfig?: typeof loadPublishedAgentConfig;
@@ -242,6 +247,37 @@ export async function resolveTurnAgent(
         confidence: null,
         outcome: 'no_router',
       };
+    }
+
+    // ─── Degrau 0b: a origem do contato ───
+    //
+    // Abaixo da campanha, acima do assunto. O roteador classifica a MENSAGEM, e
+    // quem clica num anúncio escreve "olá, tenho interesse": não casa com
+    // intenção nenhuma e iria para a reserva. Quando o roteador declara um
+    // agente para quem chegou por anúncio, é ele que atende — e sem gastar o
+    // classificador. Regra e prazo em `agente-da-origem.ts`.
+    //
+    // `routerId: null`, como no degrau da campanha: não é uma decisão do
+    // classificador, então não entra em `ai_router_decisions` (cujo CHECK nem
+    // conhece este desfecho) nem fixa a conversa — a pergunta é refeita a cada
+    // turno, e passa a valer "não" quando o prazo vence.
+    //
+    // Falha ABERTA: agente sem versão publicada devolve `null` e o turno segue
+    // pela régua de sempre.
+    const agenteDaOrigem = router.adOriginAgentId ?? null;
+    if (agenteDaOrigem !== null) {
+      const _veioDeAnuncio = deps.veioDeAnuncio ?? contatoDaConversaVeioDeAnuncio;
+      if (await _veioDeAnuncio(db, input.tenantId, input.conversationId)) {
+        const config = await _loadAgentById(db, input.tenantId, agenteDaOrigem);
+        if (config !== null) {
+          return { config, routerId: null, intentName: null, confidence: null, outcome: 'origem' };
+        }
+        deps.log.warn('agente de quem chegou por anúncio sem versão publicada; seguindo pela régua do número', {
+          tenantId: input.tenantId,
+          conversationId: input.conversationId,
+          routerId: router.id,
+        });
+      }
     }
 
     // fallback do router ou genérico — usado pelas regras 4, 5, 6 e 7.

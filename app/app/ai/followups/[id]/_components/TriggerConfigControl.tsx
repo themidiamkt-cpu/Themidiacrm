@@ -82,6 +82,8 @@ interface TriggerFormState {
   stageId: string;
   cancelOnReply: boolean;
   eventTypeIds: string[];
+  /** Gatilho "Lead criado": só quem chegou por anúncio online. */
+  soDeAnuncio: boolean;
 }
 
 const DEFAULT_THRESHOLD_MINUTES = 60;
@@ -128,7 +130,7 @@ function parseTriggerConfig(raw: Record<string, unknown>): TriggerFormState {
                   ? "lead_created"
                   : "manual";
   const params =
-    (raw.params as { threshold_minutes?: number; segments?: string[]; stage_id?: string; event_type_ids?: string[] } | undefined) ?? {};
+    (raw.params as { threshold_minutes?: number; segments?: string[]; stage_id?: string; event_type_ids?: string[]; origem?: string } | undefined) ?? {};
   const minutosRetorno =
     kind === "inbound_after_silence" && typeof params.threshold_minutes === "number"
       ? params.threshold_minutes
@@ -148,6 +150,7 @@ function parseTriggerConfig(raw: Record<string, unknown>): TriggerFormState {
         ? params.segments.join(", ")
         : "",
     stageId: kind === "stage_change" && typeof params.stage_id === "string" ? params.stage_id : "",
+    soDeAnuncio: kind === "lead_created" && params.origem === "anuncio",
     cancelOnReply: raw.cancel_on_reply === true,
   };
 }
@@ -165,7 +168,13 @@ function toTriggerConfig(form: TriggerFormState): Record<string, unknown> {
   // todo fluxo armado assim.
   if (form.kind === "case_opened") return { kind: "case_opened", ...cancelOnReply };
   if (form.kind === "webhook") return { kind: "webhook", ...cancelOnReply };
-  if (form.kind === "lead_created") return { kind: "lead_created", ...cancelOnReply };
+  if (form.kind === "lead_created") {
+    return {
+      kind: "lead_created",
+      ...(form.soDeAnuncio ? { params: { origem: "anuncio" } } : {}),
+      ...cancelOnReply,
+    };
+  }
 
   const segments = form.segments
     .split(",")
@@ -229,7 +238,12 @@ function summaryLabel(
   }
   if (cfg.kind === "case_opened") return `${t("Gatilho")}: ${t("quando o agente pede ajuda")}`;
   if (cfg.kind === "webhook") return t("Disparado por uma automação em Webhooks");
-  if (cfg.kind === "lead_created") return `${t("Gatilho")}: ${t("Lead criado")}`;
+  if (cfg.kind === "lead_created") {
+    const soDeAnuncio = (cfg.params as { origem?: unknown } | undefined)?.origem === "anuncio";
+    return soDeAnuncio
+      ? `${t("Gatilho")}: ${t("chegou por anúncio online")}`
+      : `${t("Gatilho")}: ${t("Lead criado")}`;
+  }
   if (cfg.kind === "manual" || cfg.kind === undefined) return `${t("Gatilho")}: ${t("Manual")}`;
   // conversation_end de dados antigos (API crua) — sem UI própria, mas mostrado
   // com transparência em vez de mentir "Manual".
@@ -283,7 +297,8 @@ export function TriggerConfigControl({ flowId, triggerConfig }: Props) {
       (form.thresholdValor !== saved.thresholdValor ||
         form.thresholdUnidade !== saved.thresholdUnidade ||
         form.segments !== saved.segments)) ||
-    (form.kind === "stage_change" && form.stageId !== saved.stageId);
+    (form.kind === "stage_change" && form.stageId !== saved.stageId) ||
+    (form.kind === "lead_created" && form.soDeAnuncio !== saved.soDeAnuncio);
 
   const onSave = () => {
     if (thresholdInvalid || stageInvalid) return;
@@ -405,6 +420,24 @@ export function TriggerConfigControl({ flowId, triggerConfig }: Props) {
 
           {form.kind === "lead_created" && (
             <div className="space-y-2">
+              <label className="flex items-start gap-2 text-sm" htmlFor="gatilho-so-de-anuncio">
+                <input
+                  id="gatilho-so-de-anuncio"
+                  data-testid="gatilho-so-de-anuncio"
+                  type="checkbox"
+                  className="mt-1"
+                  checked={form.soDeAnuncio}
+                  onChange={(e) => setForm((f) => ({ ...f, soDeAnuncio: e.target.checked }))}
+                />
+                <span>
+                  {t("Só quem chegou por anúncio online")}
+                  <span className="block text-xs text-muted-foreground">
+                    {t(
+                      "Anúncio de clique para o WhatsApp, ou página com origem de campanha. Quem chega de outro jeito não entra neste fluxo.",
+                    )}
+                  </span>
+                </span>
+              </label>
               <p className="text-xs text-muted-foreground">
                 {t(
                   "O fluxo começa quando um negócio nasce: a primeira mensagem que abre o card, um formulário ou o cadastro manual. Negócios importados por planilha não entram. A entrada na fila leva poucos minutos, não é instantânea.",

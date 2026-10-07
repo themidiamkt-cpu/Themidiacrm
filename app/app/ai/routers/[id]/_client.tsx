@@ -75,6 +75,12 @@ const AUTO = "__auto__";
  * config da ORGANIZAÇÃO, então um id de modelo salvo sozinho viaja para o
  * provedor errado e a classificação falha em toda mensagem.
  */
+/** O agente de quem chegou por anúncio, gravado no `config` do roteador. Vazio = nenhum. */
+function adAgentFrom(config: Record<string, unknown> | null | undefined): string {
+  const id = config?.ad_origin_agent_id;
+  return typeof id === "string" ? id : "";
+}
+
 function classifierKeyFrom(config: Record<string, unknown> | null | undefined): string {
   const cfg = config ?? {};
   const model = cfg["classifier_model"];
@@ -104,6 +110,9 @@ export function RouterEditorClient({
   const [name, setName] = React.useState(router.name);
   const [isActive, setIsActive] = React.useState(router.is_active);
   const [fallbackAgentId, setFallbackAgentId] = React.useState(router.fallback_agent_id ?? "");
+  // Quem chegou por anúncio: decidido pela ORIGEM do contato, antes do assunto.
+  // Mora no `config` do roteador (`ad_origin_agent_id`), como o modelo do classificador.
+  const [adAgentId, setAdAgentId] = React.useState(() => adAgentFrom(router.config));
   // Uma chave só para os dois campos: escolher modelo sem levar o provedor junto
   // manda o id para o provedor da ORG, e a classificação falha sempre.
   const [classifier, setClassifier] = React.useState(() => classifierKeyFrom(router.config));
@@ -129,6 +138,7 @@ export function RouterEditorClient({
       name: router.name,
       isActive: router.is_active,
       fallbackAgentId: router.fallback_agent_id ?? "",
+      adAgentId: adAgentFrom(router.config),
       classifier: classifierKeyFrom(router.config),
       members: members.map(({ agent_id, intent_name, intent_description, examples, flow_pointer_id }) => ({
         agent_id,
@@ -155,6 +165,7 @@ export function RouterEditorClient({
     name !== baseline.name ||
     isActive !== baseline.isActive ||
     fallbackAgentId !== baseline.fallbackAgentId ||
+    adAgentId !== baseline.adAgentId ||
     classifier !== baseline.classifier ||
     JSON.stringify(currentMembers) !== JSON.stringify(baseline.members);
 
@@ -209,6 +220,7 @@ export function RouterEditorClient({
         name !== baseline.name ||
         isActive !== baseline.isActive ||
         fallbackAgentId !== baseline.fallbackAgentId ||
+        adAgentId !== baseline.adAgentId ||
         classifier !== baseline.classifier
       ) {
         const [provider, modelId] = classifier.split("::");
@@ -216,12 +228,14 @@ export function RouterEditorClient({
           name,
           is_active: isActive,
           fallback_agent_id: fallbackAgentId || null,
-          // O PATCH mescla `config` com a existente, então mandar só estes dois
+          // O PATCH mescla `config` com a existente, então mandar só estes
           // campos preserva sticky/min_confidence.
-          config:
-            classifier === AUTO
+          config: {
+            ...(classifier === AUTO
               ? { classifier_model: null, classifier_provider: null }
-              : { classifier_model: modelId, classifier_provider: provider },
+              : { classifier_model: modelId, classifier_provider: provider }),
+            ad_origin_agent_id: adAgentId || null,
+          },
         });
       }
       if (JSON.stringify(currentMembers) !== JSON.stringify(baseline.members)) {
@@ -369,6 +383,35 @@ export function RouterEditorClient({
               <p className="text-xs text-muted-foreground">
                 {t(
                   "Quando a IA não tem certeza do que o cliente quer, ela chama este agente em vez de travar a conversa.",
+                )}
+              </p>
+            </div>
+          </Card>
+
+          <Card className="space-y-3 p-4" data-testid="roteador-origem-anuncio">
+            <h3 className="text-sm font-medium">{t("Quem chega por anúncio online")}</h3>
+            <div className="space-y-1">
+              <Label htmlFor="router-ad-agent">{t("Agente que atende quem veio de anúncio")}</Label>
+              <Select
+                value={adAgentId || NONE}
+                onValueChange={(v) => setAdAgentId(v === NONE ? "" : v)}
+                disabled={!canManage}
+              >
+                <SelectTrigger id="router-ad-agent">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>{t("Nenhum — decide pelo assunto, como os demais")}</SelectItem>
+                  {agents.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "Vale para quem chegou por anúncio de clique para o WhatsApp ou por uma página com origem de campanha, nos primeiros 30 dias. Este agente atende desde a primeira mensagem, antes de o assunto ser avaliado. Depois do prazo, a conversa volta para as intenções acima.",
                 )}
               </p>
             </div>

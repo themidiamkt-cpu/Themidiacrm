@@ -25,6 +25,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { EventRow } from "@/lib/event-log/dispatcher";
 import { ORIGEM_DA_PLANILHA } from "@/lib/leads/planilha";
+import { veioDeAnuncio } from "@/lib/leads/veio-de-anuncio";
 import { flowGraphSchema } from "./graph-schema";
 import { triggerConfigSchema } from "./api-schemas";
 import {
@@ -40,11 +41,20 @@ export interface PointerDeLead {
   id: string;
   organization_id: string;
   active_version_id: string;
+  /** `trigger_config.params.origem === "anuncio"`: só inscreve quem chegou por anúncio online. */
+  so_de_anuncio?: boolean;
 }
 
 export interface GatilhoLeadDb {
   carregaPointersDeLead(orgId: string): Promise<PointerDeLead[]>;
   carregaContatoDoNegocio(orgId: string, leadId: string): Promise<string | null>;
+  /**
+   * `contacts.source_metadata` do contato, para o filtro de origem. Opcional na
+   * interface: quem não o fornece não consegue provar a origem, e fluxo que a
+   * exige não inscreve ninguém (falha fechada — mensagem proativa a mais é
+   * pior que uma a menos).
+   */
+  carregaOrigemDoContato?(orgId: string, contactId: string): Promise<unknown>;
   carregaNoDeGatilho(orgId: string, versionId: string): Promise<NoDeGatilho | null>;
   insereEnrollment(input: {
     service_origin?: unknown;
@@ -74,6 +84,8 @@ export interface GatilhoLeadSummary {
   enrolled: number;
   skipped_existing: number;
   skipped_stale_origin?: number;
+  /** Fluxos que pedem "só de anúncio" e não entraram porque o contato não veio de anúncio. */
+  fora_da_origem?: number;
   sem_contato: number;
   vindos_de_planilha: number;
 }
@@ -127,7 +139,20 @@ export async function aplicaGatilhoDeLead(
     return summary;
   }
 
+  // A origem é do CONTATO e vale para todos os fluxos deste evento: uma leitura
+  // só, e só quando algum fluxo armado a exige.
+  let contatoVeioDeAnuncio: boolean | null = null;
+  if (armados.some((p) => p.so_de_anuncio)) {
+    contatoVeioDeAnuncio = deps.db.carregaOrigemDoContato
+      ? veioDeAnuncio(await deps.db.carregaOrigemDoContato(row.organization_id, contatoId))
+      : false;
+  }
+
   for (const pointer of armados) {
+    if (pointer.so_de_anuncio && contatoVeioDeAnuncio !== true) {
+      summary.fora_da_origem = (summary.fora_da_origem ?? 0) + 1;
+      continue;
+    }
     const noDeGatilho = await deps.db.carregaNoDeGatilho(row.organization_id, pointer.active_version_id);
     if (!noDeGatilho) continue;
     const { agentId, barrado } = await decidirAgenteDoEnrollmentAutomatico(
@@ -201,9 +226,21 @@ export function createSupabaseGatilhoLeadDb(admin: SupabaseClient): GatilhoLeadD
           id: row.id,
           organization_id: row.organization_id,
           active_version_id: row.active_version_id,
+          so_de_anuncio: parsed.data.params?.origem === "anuncio",
         });
       }
       return pointers;
+    },
+
+    async carregaOrigemDoContato(orgId, contactId) {
+      const { data, error } = await admin
+        .from("contacts")
+        .select("source_metadata")
+        .eq("id", contactId)
+        .eq("organization_id", orgId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return (data as { source_metadata?: unknown } | null)?.source_metadata ?? null;
     },
 
     async carregaContatoDoNegocio(orgId, leadId) {

@@ -50,6 +50,15 @@ export interface LoadedRouter {
   sticky: boolean;
   minConfidence: number;
   fallbackAgentId: string | null;
+  /**
+   * Agente de quem chegou por anúncio (`config.ad_origin_agent_id`). `null` =
+   * a origem não decide nada e o roteador segue só pelo assunto. Mora no
+   * `config` jsonb, sem coluna nem chave estrangeira: um id que deixou de
+   * existir não tem versão publicada, e o resolvedor segue pela régua comum.
+   * Opcional no tipo: ausente vale `null` (quem monta um roteador à mão, como
+   * os testes do classificador, não precisa conhecer esta regra).
+   */
+  adOriginAgentId?: string | null;
   members: RouterMember[];
 }
 
@@ -67,6 +76,9 @@ interface MemberRow {
   examples: string[] | null;
   flow_pointer_id: string | null;
 }
+
+/** Leitura defensiva do `config`: só um uuid bem formado vale como agente. */
+const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function loadActiveRouter(
   db: pg.Pool,
@@ -98,6 +110,7 @@ export async function loadActiveRouter(
     classifier_provider?: unknown;
     sticky?: unknown;
     min_confidence?: unknown;
+    ad_origin_agent_id?: unknown;
   };
   const classifierModel =
     typeof cfg.classifier_model === 'string' && cfg.classifier_model.trim() !== ''
@@ -112,6 +125,10 @@ export async function loadActiveRouter(
     typeof cfg.min_confidence === 'number' && cfg.min_confidence >= 0 && cfg.min_confidence <= 1
       ? cfg.min_confidence
       : 0.6;
+  const adOriginAgentId =
+    typeof cfg.ad_origin_agent_id === 'string' && UUID_RX.test(cfg.ad_origin_agent_id)
+      ? cfg.ad_origin_agent_id
+      : null;
 
   return {
     id: router.id,
@@ -121,6 +138,7 @@ export async function loadActiveRouter(
     sticky,
     minConfidence,
     fallbackAgentId: router.fallback_agent_id,
+    adOriginAgentId,
     members: memberRows.map((m) => ({
       agentId: m.agent_id,
       intentName: m.intent_name,

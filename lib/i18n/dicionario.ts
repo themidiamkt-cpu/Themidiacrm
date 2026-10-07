@@ -3076,6 +3076,13 @@ export const DICIONARIO: Traducoes = {
     },
   "Se nenhuma intenção casar": { es: "Si ninguna intención coincide" },
   "Agente de fallback": { es: "Agente de fallback" },
+  "Quem chega por anúncio online": { es: "Quien llega por anuncio en línea" },
+  "Só quem chegou por anúncio online": { es: "Solo quien llegó por anuncio en línea" },
+  "Anúncio de clique para o WhatsApp, ou página com origem de campanha. Quem chega de outro jeito não entra neste fluxo.": { es: "Anuncio de clic a WhatsApp, o página con origen de campaña. Quien llega de otra forma no entra en este flujo." },
+  "chegou por anúncio online": { es: "llegó por anuncio en línea" },
+  "Agente que atende quem veio de anúncio": { es: "Agente que atiende a quien vino de un anuncio" },
+  "Nenhum — decide pelo assunto, como os demais": { es: "Ninguno — decide por el tema, como los demás" },
+  "Vale para quem chegou por anúncio de clique para o WhatsApp ou por uma página com origem de campanha, nos primeiros 30 dias. Este agente atende desde a primeira mensagem, antes de o assunto ser avaliado. Depois do prazo, a conversa volta para as intenções acima.": { es: "Vale para quien llegó por un anuncio de clic a WhatsApp o por una página con origen de campaña, en los primeros 30 días. Este agente atiende desde el primer mensaje, antes de que se evalúe el tema. Después del plazo, la conversación vuelve a las intenciones de arriba." },
   "Nenhum — responde com o atendimento padrão": { es: "Ninguno: responde con la atención estándar" },
   "Quando a IA não tem certeza do que o cliente quer, ela chama este agente em vez de travar a conversa.": {
     es: "Cuando la IA no está segura de lo que quiere el cliente, llama a este agente en vez de trabar la conversación.",
