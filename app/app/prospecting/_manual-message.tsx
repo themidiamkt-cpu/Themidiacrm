@@ -50,6 +50,7 @@ export function ManualMessageForm({
   campaignId,
   saved,
   initial = null,
+  anteriores = [],
   options,
   onChanged,
 }: {
@@ -62,6 +63,12 @@ export function ManualMessageForm({
    * montagem — o que a pessoa digita depois não é sobrescrito por um refetch.
    */
   initial?: ManualMessageConfig | null;
+  /**
+   * A abordagem mais recente de cada funil
+   * (`abordagensPorFunil`). Com mais de uma, o formulário deixa escolher de qual
+   * partir — quem toca duas ofertas ao mesmo tempo alterna entre elas.
+   */
+  anteriores?: ManualMessageConfig[];
   options: Opcoes;
   onChanged: () => Promise<unknown>;
 }) {
@@ -121,6 +128,38 @@ export function ManualMessageForm({
           "Você escreve a mensagem, a IA adapta para cada empresa e deixa pronta no Inbox. Nada é enviado sozinho: quem envia é você, em cada conversa.",
         )}
       </p>
+      {anteriores.length > 1 && !saved && (
+        <div>
+          <Label htmlFor="manual-origem">{t("Partir da abordagem do funil")}</Label>
+          <select
+            id="manual-origem"
+            data-testid="manual-origem"
+            className={`${selectClass} mt-1`}
+            disabled={busy}
+            value={
+              anteriores.some((a) => a.pipeline_id === draft.pipeline_id) ? draft.pipeline_id : ""
+            }
+            onChange={(e) => {
+              const escolhida = anteriores.find((a) => a.pipeline_id === e.target.value);
+              if (escolhida) setDraft(escolhida);
+            }}
+          >
+            <option value="" disabled>
+              {t("Escolha o funil")}
+            </option>
+            {anteriores.map((a) => (
+              <option key={a.pipeline_id} value={a.pipeline_id}>
+                {funis.find(([id]) => id === a.pipeline_id)?.[1] ?? a.pipeline_id}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t(
+              "Traz a mensagem, as etapas e as opções da última abordagem daquele funil. Você ainda pode alterar tudo abaixo.",
+            )}
+          </p>
+        </div>
+      )}
       {aproveitada && !saved && (
         <p className="rounded-md border bg-muted/30 p-3 text-sm" data-testid="manual-aproveitada">
           {t(

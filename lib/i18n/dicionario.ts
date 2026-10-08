@@ -591,6 +591,8 @@ export const DICIONARIO: Traducoes = {
   "Nenhuma empresa neste filtro.": { es: "Ninguna empresa en este filtro." },
   "Link do perfil (rede social)": { es: "Enlace del perfil (red social)" },
   "Filtrar por andamento": { es: "Filtrar por avance" },
+  "Partir da abordagem do funil": { es: "Partir del contacto del embudo" },
+  "Traz a mensagem, as etapas e as opções da última abordagem daquele funil. Você ainda pode alterar tudo abaixo.": { es: "Trae el mensaje, las etapas y las opciones del último contacto de ese embudo. Aún puedes cambiar todo abajo." },
   "Preenchido com a sua última abordagem manual. Revise e altere o que quiser antes de preparar.": { es: "Completado con tu último contacto manual. Revisa y cambia lo que quieras antes de preparar." },
   // ─── FOLLOW-UP: PESSOAS EM CADA PASSO DO FLUXO (construtor) ───
   "Pessoas no fluxo": { es: "Personas en el flujo" },

@@ -22,7 +22,10 @@ import { ProspectingAgentBuilder, type CreatedProspectingAgent } from "./_create
 import { ContinueManualButton, ManualMessageForm } from "./_manual-message";
 import { temSiteProprio } from "@/lib/prospecting/site-proprio";
 import { filtrarResultados, type FiltroDeSite } from "@/lib/prospecting/filtro-de-resultados";
-import { aproveitarUltimaAbordagem } from "@/lib/prospecting/ultima-abordagem-manual";
+import {
+  abordagensPorFunil,
+  aproveitarUltimaAbordagem,
+} from "@/lib/prospecting/ultima-abordagem-manual";
 import type { ProspectingAgentSetupInput } from "@/lib/prospecting/agent-setup-schema";
 
 type Campaign = {
@@ -629,6 +632,11 @@ export function ProspectingClient() {
                             campaignId={campaign.id}
                             saved={null}
                             initial={aproveitarUltimaAbordagem(data.campaigns, {
+                              agents,
+                              channels: data.channels,
+                              stages: data.stages,
+                            })}
+                            anteriores={abordagensPorFunil(data.campaigns, {
                               agents,
                               channels: data.channels,
                               stages: data.stages,

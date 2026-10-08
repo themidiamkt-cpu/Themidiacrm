@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aproveitarUltimaAbordagem } from "./ultima-abordagem-manual";
+import { abordagensPorFunil, aproveitarUltimaAbordagem } from "./ultima-abordagem-manual";
 
 const CANAL = "0a122aee-127d-4fdf-88c0-d2f5e6953b41";
 const FUNIL = "6426c178-e5dd-49b4-bd88-9cd95b1c2cc3";
@@ -96,5 +96,52 @@ describe("aproveitarUltimaAbordagem", () => {
       only_without_site: false,
       personalize: true,
     });
+  });
+});
+
+describe("abordagensPorFunil", () => {
+  const OUTRO_FUNIL = "ccaa55e2-9ab6-4436-8969-5bf7c871bd8e";
+  const ETAPA_DO_OUTRO = "11111111-2222-4333-8444-555555555555";
+  const doisFunis = {
+    ...opcoes,
+    stages: [...opcoes.stages, { id: ETAPA_DO_OUTRO, pipeline_id: OUTRO_FUNIL }],
+  };
+  const clinicas = (over: Record<string, unknown> = {}) =>
+    manual({
+      pipeline_id: OUTRO_FUNIL,
+      stage_id: ETAPA_DO_OUTRO,
+      sent_stage_id: null,
+      replied_stage_id: null,
+      agent_id: null,
+      base_message: "Com quem eu falo sobre o marketing da clínica?",
+      ...over,
+    });
+
+  it("devolve a mais recente de cada funil, da mais nova para a mais antiga", () => {
+    const lista = abordagensPorFunil(
+      [
+        { config: null },
+        { config: clinicas() },
+        { config: manual({ base_message: "Site, a mais nova." }) },
+        { config: clinicas({ base_message: "Clínicas, antiga." }) },
+        { config: manual({ base_message: "Site, antiga." }) },
+      ],
+      doisFunis,
+    );
+    expect(lista.map((c) => c.base_message)).toEqual([
+      "Com quem eu falo sobre o marketing da clínica?",
+      "Site, a mais nova.",
+    ]);
+    expect(lista.map((c) => c.pipeline_id)).toEqual([OUTRO_FUNIL, FUNIL]);
+  });
+
+  it("deixa de fora a abordagem de um funil que não existe mais", () => {
+    expect(abordagensPorFunil([{ config: clinicas() }, { config: manual() }], opcoes)).toEqual([
+      manual(),
+    ]);
+  });
+
+  it("sem abordagem manual, lista vazia", () => {
+    expect(abordagensPorFunil([{ config: null }], opcoes)).toEqual([]);
   });
 });

@@ -14,6 +14,16 @@
  *  - a empresa respondeu DEPOIS de um minuto do primeiro envio → vai para a etapa
  *    de "respondeu". O minuto existe porque saudação e ausência do WhatsApp
  *    Business chegam em segundos e não são resposta de ninguém.
+ *  - mensagem recebida com o MESMO texto de uma anterior da própria conversa
+ *    também não conta: é o robô da empresa repetindo a saudação a cada toque.
+ *    Sem isto, o follow-up de dois dias depois recebia a saudação de volta, o
+ *    cartão saía de "abordado" e a empresa saía do próprio follow-up sem ninguém
+ *    ter respondido. Só vale para texto com mais de 20 caracteres: "ok" e "sim"
+ *    repetidos são de gente.
+ *
+ * Na dúvida, conta como resposta. Tratar uma pessoa como robô faria o follow-up
+ * automático insistir com quem já respondeu, que é o erro caro; tratar um robô
+ * como pessoa só encerra o follow-up mais cedo.
  *
  * Só anda para FRENTE e só a partir das etapas que a própria sincronia conhece
  * (inicial e abordado): cartão que alguém moveu à mão não é tocado.
@@ -26,6 +36,9 @@ import { isManualMessageConfig } from "./schema";
 
 /** Quanto depois do primeiro envio uma mensagem recebida conta como resposta. */
 export const SEGUNDOS_PARA_CONTAR_COMO_RESPOSTA = 60;
+
+/** Texto repetido só é tratado como robô acima deste tamanho. */
+export const TAMANHO_MINIMO_DO_TEXTO_AUTOMATICO = 20;
 
 export interface EtapaDoFunil {
   id: string;
@@ -125,7 +138,10 @@ export async function sincronizarFunilDaAbordagem(pool: pg.Pool, admin: Supabase
   const { rows } = await pool.query<Linha>(
     `select p.id,p.organization_id,p.campaign_id,p.status,p.lead_id,l.stage_id,l.pipeline_id,c.config,o.primeiro_envio,
             exists(select 1 from messages i where i.organization_id=p.organization_id and i.conversation_id=p.conversation_id
-                   and i.direction='inbound' and i.created_at > o.primeiro_envio + make_interval(secs => $1)) as respondeu
+                   and i.direction='inbound' and i.created_at > o.primeiro_envio + make_interval(secs => $1)
+                   and not exists(select 1 from messages a where a.organization_id=i.organization_id and a.conversation_id=i.conversation_id
+                                  and a.direction='inbound' and a.created_at < i.created_at
+                                  and length(i.body) > $3 and a.body = i.body)) as respondeu
        from prospecting_candidates p
        join prospecting_campaigns c on c.organization_id=p.organization_id and c.id=p.campaign_id
        join crm_leads l on l.organization_id=p.organization_id and l.id=p.lead_id
@@ -137,7 +153,7 @@ export async function sincronizarFunilDaAbordagem(pool: pg.Pool, admin: Supabase
           or (c.config->>'mode' is null and p.status='sent'))
         and (p.status='queued' or l.stage_id::text = c.config->>'stage_id' or l.updated_at > now() - interval '14 days')
       order by p.updated_at limit $2`,
-    [SEGUNDOS_PARA_CONTAR_COMO_RESPOSTA, TETO_POR_RODADA],
+    [SEGUNDOS_PARA_CONTAR_COMO_RESPOSTA, TETO_POR_RODADA, TAMANHO_MINIMO_DO_TEXTO_AUTOMATICO],
   );
   const etapasPorCampanha = new Map<string, EtapasDaAbordagem | null>();
   let abordados = 0;

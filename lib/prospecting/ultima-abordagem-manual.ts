@@ -30,7 +30,37 @@ export function aproveitarUltimaAbordagem(
   opcoes: Opcoes,
 ): ManualMessageConfig | null {
   const anterior = campanhas.map((c) => c.config).find(isManualMessageConfig);
-  if (!anterior) return null;
+  return anterior ? conferir(anterior, opcoes) : null;
+}
+
+/**
+ * A abordagem mais recente de CADA funil, da mais nova para a mais antiga.
+ *
+ * Quem prospecta duas ofertas ao mesmo tempo (um funil para cada) alterna entre
+ * elas, e "a última abordagem" passa a ser a da oferta errada metade das vezes:
+ * mensagem de uma indo para o funil da outra. Com uma por funil o formulário
+ * deixa escolher de qual partir.
+ *
+ * Abordagem cujo funil não existe mais fica de fora: não há como nomeá-la na
+ * lista nem para onde mandar as empresas.
+ */
+export function abordagensPorFunil(
+  campanhas: { config: unknown }[],
+  opcoes: Opcoes,
+): ManualMessageConfig[] {
+  const vistos = new Set<string>();
+  const lista: ManualMessageConfig[] = [];
+  for (const config of campanhas.map((c) => c.config)) {
+    if (!isManualMessageConfig(config) || vistos.has(config.pipeline_id)) continue;
+    vistos.add(config.pipeline_id);
+    const conferida = conferir(config, opcoes);
+    if (conferida.pipeline_id) lista.push(conferida);
+  }
+  return lista;
+}
+
+/** Devolve a configuração só com o que ainda existe (ver o cabeçalho do módulo). */
+function conferir(anterior: ManualMessageConfig, opcoes: Opcoes): ManualMessageConfig {
   // Etapa só vale dentro do funil da abordagem; funil que sumiu leva as etapas junto.
   const etapa = (id: string | null | undefined) =>
     opcoes.stages.find((s) => s.id === id && s.pipeline_id === anterior.pipeline_id)?.id ?? null;
