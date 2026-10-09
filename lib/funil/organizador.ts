@@ -338,6 +338,8 @@ export const DIAS_DE_JANELA = 3;
 /** Minutos que uma análise que FALHOU segura a conversa. */
 export const MINUTOS_DE_ESPERA_APOS_FALHA = 30;
 
+/** Quantas vezes o limite da rodada o banco devolve, para as adiadas não tomarem as vagas. */
+const FOLGA_DA_LEITURA = 10;
 const CHAVE_DA_TRAVA = "funil-organizador";
 /** Quem moveu, na auditoria do movimento. Não é um agente: a atividade sai como "sistema". */
 const ATOR_DO_ORGANIZADOR = "funil-organizador";
@@ -553,14 +555,20 @@ export async function tickOrganizadorDeFunil(
       MINUTOS_DE_SILENCIO,
       DIAS_DE_JANELA,
       MINUTOS_DE_ESPERA_APOS_FALHA,
-      limite,
+      // Lê mais do que vai tratar: as conversas adiadas em memória (sem texto,
+      // erro nosso, orçamento da organização estourado) continuam candidatas
+      // para o banco. Se ocupassem as vagas da rodada, quinze delas na frente
+      // da fila parariam o organizador de TODAS as organizações.
+      limite * FOLGA_DA_LEITURA,
     ]);
     r.candidatas = candidatas.rows.length;
+    let tratadas = 0;
     for (const c of candidatas.rows) {
-      if (Date.now() - inicio > prazoMs) break;
+      if (tratadas >= limite || Date.now() - inicio > prazoMs) break;
       const agora = opcoes.agora ?? new Date();
       if ((adiadas.get(c.conversation_id) ?? 0) > agora.getTime()) continue;
       if ((adiadas.get(c.organization_id) ?? 0) > agora.getTime()) continue;
+      tratadas += 1;
       try {
         await organizarConversa(pool, admin, c, r, agora);
       } catch (erro) {

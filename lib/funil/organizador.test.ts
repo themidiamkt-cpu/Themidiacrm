@@ -316,6 +316,29 @@ describe("a rodada", () => {
     expect(runModelCall).not.toHaveBeenCalled();
   });
 
+  it("conversa adiada não ocupa vaga da rodada: as seguintes são tratadas", async () => {
+    // Três conversas sem nada legível ficam adiadas em memória e seguem voltando do banco.
+    const vazias = ["a", "b", "c"].map((k) => ({ ...CANDIDATA, conversation_id: "conv-sem-texto-" + k }));
+    const semTexto = poolFalso({ candidatas: vazias, negocios: [NEGOCIO], mensagens: [msg({ body: "" })] });
+    await tickOrganizadorDeFunil(semTexto.pool as never, {} as never, { limite: 3 });
+    expect(runModelCall).not.toHaveBeenCalled();
+    // Na rodada seguinte elas vêm na frente da fila; com limite 3, a conversa boa ainda é lida.
+    runModelCall.mockResolvedValue({ result: { text: '{"etapa": 2, "motivo": "segue"}' } });
+    const boa = { ...CANDIDATA, conversation_id: "conv-depois-das-adiadas", contact_id: "contato-9" };
+    const seguinte = poolFalso({ candidatas: [...vazias, boa], negocios: [NEGOCIO], mensagens: CONVERSA });
+    const r = await tickOrganizadorDeFunil(seguinte.pool as never, {} as never, { limite: 3 });
+    expect(r).toMatchObject({ candidatas: 4, analisadas: 1 });
+    expect(runModelCall).toHaveBeenCalledTimes(1);
+  });
+
+  it("o limite da rodada vale para as conversas tratadas", async () => {
+    runModelCall.mockResolvedValue({ result: { text: '{"etapa": 2, "motivo": "segue"}' } });
+    const cinco = [1, 2, 3, 4, 5].map((k) => ({ ...CANDIDATA, conversation_id: "conv-limite-" + k, contact_id: "c-" + k }));
+    const { pool } = poolFalso({ candidatas: cinco, negocios: [NEGOCIO], mensagens: CONVERSA });
+    const r = await tickOrganizadorDeFunil(pool as never, {} as never, { limite: 2 });
+    expect(r).toMatchObject({ candidatas: 5, analisadas: 2 });
+  });
+
   it("falha numa conversa não para as outras, e a que falhou espera antes de tentar de novo", async () => {
     runModelCall.mockRejectedValueOnce(new Error("sem crédito")).mockResolvedValue({ result: { text: '{"etapa": 3, "motivo": "ok"}' } });
     const duas = [{ ...CANDIDATA, conversation_id: "conv-falha" }, { ...CANDIDATA, conversation_id: "conv-boa", contact_id: "contato-2" }];
