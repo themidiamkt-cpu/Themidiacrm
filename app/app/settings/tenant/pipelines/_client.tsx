@@ -24,6 +24,7 @@ import { customFieldSchema, type CustomFieldDef } from "@/lib/schemas/settings";
 import { Plus, Trash } from "@/lib/ui/icons";
 import { AgentMappingSection, ancoraDoMapeamento } from "./_mapping";
 import { StagesSection, ancoraDasEtapas } from "./_stages";
+import { OrganizadorSection } from "./_organizador";
 
 export interface PipelineRow {
   id: string;
@@ -197,6 +198,9 @@ export function PipelinesClient({
           <div className="border-t border-border pt-6">
             <AgentMappingSection pipelineId={p.id} ancoraEtapas={ancoraDasEtapas(p.id)} />
           </div>
+          {podeEditarConfig && (
+            <OrganizadorSection pipelineId={p.id} pipelineName={p.name} settings={p.settings} />
+          )}
           {podeEditarConfig && <PipelineEditor pipeline={p} etapas={etapas[p.id] ?? []} />}
         </Card>
       ))}

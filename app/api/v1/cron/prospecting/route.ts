@@ -6,17 +6,42 @@ import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { tickProspecting } from "@/lib/prospecting/worker";
 import { sincronizarFunilDaAbordagem } from "@/lib/prospecting/manual-sync";
+import { tickOrganizadorDeFunil } from "@/lib/funil/organizador";
 import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+
+/**
+ * O organizador de funil pega carona NESTE cron porque ele é o que roda a cada
+ * minuto e já está na lista do agendador (a imagem do agendador é a oficial:
+ * rota nova de cron não seria chamada por ninguém). Não tem nada de
+ * prospecção: corre em paralelo e nunca rejeita, para uma falha de um lado não
+ * parar o outro.
+ */
+async function organizarFunis(
+  pool: ReturnType<typeof getRequestPool>,
+  admin: ReturnType<typeof createAdminClient>,
+  requestId: string,
+) {
+  try {
+    return await tickOrganizadorDeFunil(pool, admin);
+  } catch (err) {
+    const erro = err instanceof Error ? err.message : String(err);
+    logger.error("[prospecting.cron] organizador de funil lançou", { error: erro, requestId });
+    return { erro };
+  }
+}
+
 async function handle(req: NextRequest) {
   const requestId = randomUUID();
   if (!autorizaCron(req))
     return fail("forbidden", "Credencial de execução inválida.", 403, { requestId });
+  let organizando: ReturnType<typeof organizarFunis> | null = null;
   try {
     const pool = getRequestPool();
     const admin = createAdminClient();
+    organizando = organizarFunis(pool, admin, requestId);
     const tick = await tickProspecting(pool, admin);
     // O funil acompanha o que a conversa mostra (envio e resposta). Falha aqui
     // não derruba a fila: a rodada seguinte tenta de novo.
@@ -30,8 +55,13 @@ async function handle(req: NextRequest) {
         requestId,
       });
     }
-    return ok({ ...(tick as Record<string, unknown>), funil }, { requestId });
+    return ok(
+      { ...(tick as Record<string, unknown>), funil, organizador: await organizando },
+      { requestId },
+    );
   } catch (err) {
+    // A rodada do organizador termina antes da resposta, mesmo com a prospecção quebrada.
+    if (organizando) await organizando;
     // O `catch` era SEM PARÂMETRO: o objeto do erro não ficava de fora do log,
     // ele era DESCARTADO — não existia em variável nenhuma. Num cron, que roda
     // sozinho e sem ninguém olhando, isso significava que a prospecção da

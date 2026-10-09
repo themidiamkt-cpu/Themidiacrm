@@ -322,6 +322,22 @@ export const PONTOS_DE_IA: readonly PontoDeIa[] = [
     registraEm: "llm_calls",
   },
   {
+    id: "funnel_organizer",
+    rotulo: "Organizar o funil pela conversa",
+    oQueFaz:
+      "Nos funis em que isso foi ligado, lê a conversa de quem é atendido por pessoas e move o " +
+      "cartão para a etapa certa. Nunca envia mensagem nem responde ao cliente.",
+    papel: "entender",
+    // `exige: {}` porque roda SEM FERRAMENTA NENHUMA: o servidor monta a conversa
+    // e a lista de etapas antes de chamar o modelo, e a resposta é só um número
+    // de etapa. Qualquer modelo barato serve.
+    exige: {},
+    emissor: "lib/funil/organizador.ts",
+    sintomaDeFalha:
+      "Os cartões dos funis com organização automática param de mudar de etapa sozinhos e ficam onde a equipe deixou.",
+    registraEm: "llm_calls",
+  },
+  {
     id: "case_chat",
     rotulo: "Conversar sobre o caso com a equipe",
     oQueFaz:

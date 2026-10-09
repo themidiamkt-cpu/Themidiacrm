@@ -256,6 +256,18 @@ export const pipelineConfigPatchSchema = z.object({
   reabertura: z.enum(["mesmo_registro", "novo_negocio"]).optional(),
   /** O que a retomada copia da origem; ausente é o piso (`custom_fields` e tags). */
   reabertura_campos: z.array(z.enum(CAMPOS_COPIAVEIS_NA_RETOMADA)).max(8).optional(),
+  /**
+   * Organizador de funil (`lib/funil/organizador.ts`): com `ligado`, a IA lê a
+   * conversa de quem é atendido por pessoas e move o cartão deste funil. Nunca
+   * envia mensagem. `instrucoes` é texto livre de quem configura (como
+   * reconhecer cada etapa). Ausente é desligado, o comportamento de sempre.
+   */
+  organizador: z
+    .object({
+      ligado: z.boolean(),
+      instrucoes: z.string().max(4000).optional(),
+    })
+    .optional(),
 });
 export type PipelineConfigPatch = z.infer<typeof pipelineConfigPatchSchema>;
 

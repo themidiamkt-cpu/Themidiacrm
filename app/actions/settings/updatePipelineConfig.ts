@@ -69,6 +69,12 @@ export async function updatePipelineConfig(
   if (parsed.data.reabertura_campos !== undefined) {
     nextSettings.reabertura_campos = parsed.data.reabertura_campos;
   }
+  if (parsed.data.organizador !== undefined) {
+    nextSettings.organizador = {
+      ligado: parsed.data.organizador.ligado,
+      instrucoes: (parsed.data.organizador.instrucoes ?? "").trim(),
+    };
+  }
 
   const { error } = await supabase
     .from("crm_pipelines")
@@ -90,6 +96,7 @@ export async function updatePipelineConfig(
       won_reasons_count: parsed.data.won_reasons?.length ?? null,
       won_reason_required: parsed.data.won_reason_required ?? null,
       reabertura: parsed.data.reabertura ?? null,
+      organizador_ligado: parsed.data.organizador?.ligado ?? null,
     },
   });
 

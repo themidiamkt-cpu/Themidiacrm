@@ -3769,6 +3769,13 @@ export const DICIONARIO: Traducoes = {
   "A conversa cai sempre no mesmo agente, ou em nenhum — como se os roteadores que você configurou não existissem.": {
     es: "La conversación cae siempre en el mismo agente, o en ninguno — como si los enrutadores que configuraste no existieran.",
   },
+  "Organizar o funil pela conversa": { es: "Organizar el embudo por la conversación" },
+  "Nos funis em que isso foi ligado, lê a conversa de quem é atendido por pessoas e move o cartão para a etapa certa. Nunca envia mensagem nem responde ao cliente.": {
+    es: "En los embudos donde esto fue activado, lee la conversación de quienes son atendidos por personas y mueve la tarjeta a la etapa correcta. Nunca envía mensajes ni responde al cliente.",
+  },
+  "Os cartões dos funis com organização automática param de mudar de etapa sozinhos e ficam onde a equipe deixou.": {
+    es: "Las tarjetas de los embudos con organización automática dejan de cambiar de etapa solas y se quedan donde el equipo las dejó.",
+  },
   "Identificar a etapa do lead": {
     es: "Identificar la etapa del lead",
   },
@@ -6434,6 +6441,20 @@ export const DICIONARIO: Traducoes = {
   },
   "atualizado.": { es: "actualizado." },
   "Vocabulário e campos": { es: "Vocabulario y campos" },
+  // ─── Organizador de funil (lib/funil/organizador.ts): a chave por funil ───
+  "Organizar pela conversa (IA)": { es: "Organizar por la conversación (IA)" },
+  "Ligado, a IA lê as conversas de quem é atendido pela equipe e move o cartão para a etapa certa deste funil. Ela não envia mensagem nem responde ao cliente. Não marca ganho e não mexe em negócio já encerrado.": {
+    es: "Activado, la IA lee las conversaciones de quienes son atendidos por el equipo y mueve la tarjeta a la etapa correcta de este embudo. No envía mensajes ni responde al cliente. No marca ganancia y no toca negocios ya cerrados.",
+  },
+  "A IA organiza as etapas deste funil": { es: "La IA organiza las etapas de este embudo" },
+  "Como reconhecer cada etapa": { es: "Cómo reconocer cada etapa" },
+  "Uma linha por etapa. Ex.: Em conversa: a pessoa já respondeu e ainda não marcou horário. Agendada: dia e hora combinados na conversa.": {
+    es: "Una línea por etapa. Ej.: En conversación: la persona ya respondió y todavía no agendó. Agendada: día y hora acordados en la conversación.",
+  },
+  "Opcional. Sem instruções, a IA se guia pelo nome das etapas. Cada movimento aparece na linha do tempo do cartão, com o motivo.": {
+    es: "Opcional. Sin instrucciones, la IA se guía por el nombre de las etapas. Cada movimiento aparece en la línea de tiempo de la tarjeta, con el motivo.",
+  },
+  "Salvar organização pela conversa": { es: "Guardar organización por la conversación" },
   "Motivos de perda (separados por vírgula)": { es: "Motivos de pérdida (separados por comas)" },
   "Ex:": { es: "Ej.:" },
   "Salvar vocabulário e campos": { es: "Guardar vocabulario y campos" },
