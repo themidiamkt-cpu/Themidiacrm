@@ -7,6 +7,7 @@ import {
   foraDoFunilDoAgente,
   funisAbertosDoContatoDaConversa,
   MAX_REGRAS_DE_FUNIL,
+  TETO_DA_CONSULTA_DO_FUNIL_MS,
   type RegraDeFunil,
 } from "./agente-do-funil";
 import { resolveTurnAgent } from "./resolve-turn-agent";
@@ -51,8 +52,19 @@ describe("funisAbertosDoContatoDaConversa", () => {
     expect(await funisAbertosDoContatoDaConversa(banco(new Error("caiu")).db, "o", "c")).toBeNull();
     vi.useFakeTimers();
     const resposta = funisAbertosDoContatoDaConversa(banco("lento").db, "o", "c");
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(TETO_DA_CONSULTA_DO_FUNIL_MS + 100);
     expect(await resposta).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("espera uma consulta de 1 segundo: banco longe não pode virar lead do funil sem resposta", async () => {
+    vi.useFakeTimers();
+    const query = vi.fn(
+      () => new Promise((resolve) => setTimeout(() => resolve({ rows: [{ pipeline_id: FUNIL_CLINICAS }] }), 1000)),
+    );
+    const resposta = funisAbertosDoContatoDaConversa({ query } as unknown as pg.Pool, "o", "c");
+    await vi.advanceTimersByTimeAsync(1100);
+    expect([...((await resposta) ?? [])]).toEqual([FUNIL_CLINICAS]);
     vi.useRealTimers();
   });
 });

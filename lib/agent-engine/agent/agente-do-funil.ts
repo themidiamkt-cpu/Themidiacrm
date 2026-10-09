@@ -38,8 +38,21 @@ export interface RegraDeFunil {
 /** Quantas regras de funil um roteador lê. O que passar disto é ignorado. */
 export const MAX_REGRAS_DE_FUNIL = 10;
 
-/** Mesmo teto e mesmo motivo de `agente-da-campanha.ts`: roteamento não segura o turno. */
-const TETO_MS = 500;
+/**
+ * Teto de tempo da consulta. Existe pelo mesmo motivo do de
+ * `agente-da-campanha.ts` (um `await` sem limite seguraria o turno inteiro),
+ * mas é bem maior que o meio segundo de lá, e de propósito.
+ *
+ * Lá, estourar o teto só devolve a conversa para a régua comum. Aqui, estourar
+ * significa "não sei se o contato está no funil", e na dúvida o agente do funil
+ * não responde: um teto apertado vira lead do funil sem resposta. E meio
+ * segundo é apertado de verdade com o banco longe: medido em 09/10/2026 numa
+ * instalação com Supabase em outra região, cada ida e volta leva ~125 ms e a
+ * primeira execução desta consulta numa conexão levou 500 ms cravados.
+ *
+ * Três segundos somem ao lado do tempo do modelo e da espera de rajada do turno.
+ */
+export const TETO_DA_CONSULTA_DO_FUNIL_MS = 3000;
 
 /**
  * Os funis em que o contato desta conversa tem negócio aberto.
@@ -65,7 +78,7 @@ export async function funisAbertosDoContatoDaConversa(
     );
     const resultado = await Promise.race([
       consulta,
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), TETO_MS)),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), TETO_DA_CONSULTA_DO_FUNIL_MS)),
     ]);
     if (resultado === null) return null;
     return new Set(resultado.rows.map((r) => r.pipeline_id));
