@@ -12,6 +12,8 @@
  */
 import type pg from 'pg';
 
+import { MAX_REGRAS_DE_FUNIL, type RegraDeFunil } from './agente-do-funil';
+
 export interface RouterMember {
   agentId: string;
   intentName: string;
@@ -59,6 +61,13 @@ export interface LoadedRouter {
    * os testes do classificador, não precisa conhecer esta regra).
    */
   adOriginAgentId?: string | null;
+  /**
+   * Quem está num funil é atendido por um agente (`config.pipeline_agents`), e
+   * esse agente não atende quem está fora dele. Regra em `agente-do-funil.ts`.
+   * Mora no `config` jsonb pelo mesmo motivo de `adOriginAgentId`; ausente vale
+   * lista vazia.
+   */
+  pipelineAgents?: RegraDeFunil[];
   members: RouterMember[];
 }
 
@@ -79,6 +88,25 @@ interface MemberRow {
 
 /** Leitura defensiva do `config`: só um uuid bem formado vale como agente. */
 const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * `config.pipeline_agents` lido com a mesma defesa: linha torta é descartada,
+ * nunca derruba o turno. Um funil só vale uma vez (a primeira regra dele).
+ */
+export function lerRegrasDeFunil(bruto: unknown): RegraDeFunil[] {
+  if (!Array.isArray(bruto)) return [];
+  const regras: RegraDeFunil[] = [];
+  for (const item of bruto) {
+    if (typeof item !== 'object' || item === null) continue;
+    const { pipeline_id: funil, agent_id: agente } = item as { pipeline_id?: unknown; agent_id?: unknown };
+    if (typeof funil !== 'string' || !UUID_RX.test(funil)) continue;
+    if (typeof agente !== 'string' || !UUID_RX.test(agente)) continue;
+    if (regras.some((r) => r.pipelineId === funil)) continue;
+    regras.push({ pipelineId: funil, agentId: agente });
+    if (regras.length === MAX_REGRAS_DE_FUNIL) break;
+  }
+  return regras;
+}
 
 export async function loadActiveRouter(
   db: pg.Pool,
@@ -111,6 +139,7 @@ export async function loadActiveRouter(
     sticky?: unknown;
     min_confidence?: unknown;
     ad_origin_agent_id?: unknown;
+    pipeline_agents?: unknown;
   };
   const classifierModel =
     typeof cfg.classifier_model === 'string' && cfg.classifier_model.trim() !== ''
@@ -139,6 +168,7 @@ export async function loadActiveRouter(
     minConfidence,
     fallbackAgentId: router.fallback_agent_id,
     adOriginAgentId,
+    pipelineAgents: lerRegrasDeFunil(cfg.pipeline_agents),
     members: memberRows.map((m) => ({
       agentId: m.agent_id,
       intentName: m.intent_name,

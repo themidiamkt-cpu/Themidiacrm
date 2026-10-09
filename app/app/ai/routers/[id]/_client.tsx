@@ -52,10 +52,27 @@ interface AgentLite {
   name: string;
 }
 
+interface PipelineLite {
+  id: string;
+  name: string;
+}
+
+/** Uma linha da regra "quem está num funil", como a tela a edita. */
+interface FunnelRule {
+  key: string;
+  pipeline_id: string;
+  agent_id: string;
+}
+
+/** Mesmo teto de `MAX_REGRAS_DE_FUNIL` (`lib/agent-engine/agent/agente-do-funil.ts`), que a rota cobra. */
+const MAX_FUNNEL_RULES = 10;
+
 interface Props {
   routerId: string;
   initialState: RouterDetailState;
   agents: AgentLite[];
+  /** Funis da organização, para a regra "quem está num funil". */
+  pipelines?: PipelineLite[];
   channelSessions: ChannelSessionLite[];
   /** Só os modelos que esta organização consegue usar — ver lib/ai/classifier-models. */
   classifierModels: ClassifierModelOption[];
@@ -81,6 +98,16 @@ function adAgentFrom(config: Record<string, unknown> | null | undefined): string
   return typeof id === "string" ? id : "";
 }
 
+/** As regras de funil gravadas no `config` do roteador (`pipeline_agents`). */
+function funnelRulesFrom(config: Record<string, unknown> | null | undefined): Array<Omit<FunnelRule, "key">> {
+  const bruto = config?.pipeline_agents;
+  if (!Array.isArray(bruto)) return [];
+  return bruto.flatMap((item) => {
+    const { pipeline_id, agent_id } = (item ?? {}) as { pipeline_id?: unknown; agent_id?: unknown };
+    return typeof pipeline_id === "string" && typeof agent_id === "string" ? [{ pipeline_id, agent_id }] : [];
+  });
+}
+
 function classifierKeyFrom(config: Record<string, unknown> | null | undefined): string {
   const cfg = config ?? {};
   const model = cfg["classifier_model"];
@@ -94,6 +121,7 @@ export function RouterEditorClient({
   routerId,
   initialState,
   agents,
+  pipelines = [],
   channelSessions,
   classifierModels,
 }: Props) {
@@ -113,6 +141,11 @@ export function RouterEditorClient({
   // Quem chegou por anúncio: decidido pela ORIGEM do contato, antes do assunto.
   // Mora no `config` do roteador (`ad_origin_agent_id`), como o modelo do classificador.
   const [adAgentId, setAdAgentId] = React.useState(() => adAgentFrom(router.config));
+  // Quem está num funil: decidido pelo negócio ABERTO do contato, antes da origem
+  // e do assunto. O agente escolhido aqui deixa de atender quem está fora do funil.
+  const [funnelRules, setFunnelRules] = React.useState<FunnelRule[]>(() =>
+    funnelRulesFrom(router.config).map((r) => ({ ...r, key: randomId() })),
+  );
   // Uma chave só para os dois campos: escolher modelo sem levar o provedor junto
   // manda o id para o provedor da ORG, e a classificação falha sempre.
   const [classifier, setClassifier] = React.useState(() => classifierKeyFrom(router.config));
@@ -139,6 +172,7 @@ export function RouterEditorClient({
       isActive: router.is_active,
       fallbackAgentId: router.fallback_agent_id ?? "",
       adAgentId: adAgentFrom(router.config),
+      funnelRules: funnelRulesFrom(router.config),
       classifier: classifierKeyFrom(router.config),
       members: members.map(({ agent_id, intent_name, intent_description, examples, flow_pointer_id }) => ({
         agent_id,
@@ -161,11 +195,20 @@ export function RouterEditorClient({
     }),
   );
 
+  const currentFunnelRules = funnelRules.map(({ pipeline_id, agent_id }) => ({ pipeline_id, agent_id }));
+  const funnelRulesChanged = JSON.stringify(currentFunnelRules) !== JSON.stringify(baseline.funnelRules);
+  const duplicateFunnels = new Set(
+    funnelRules.map((r) => r.pipeline_id).filter((id, i, arr) => id !== "" && arr.indexOf(id) !== i),
+  );
+  const funnelRulesValid =
+    funnelRules.every((r) => r.pipeline_id !== "" && r.agent_id !== "") && duplicateFunnels.size === 0;
+
   const dirty =
     name !== baseline.name ||
     isActive !== baseline.isActive ||
     fallbackAgentId !== baseline.fallbackAgentId ||
     adAgentId !== baseline.adAgentId ||
+    funnelRulesChanged ||
     classifier !== baseline.classifier ||
     JSON.stringify(currentMembers) !== JSON.stringify(baseline.members);
 
@@ -183,6 +226,7 @@ export function RouterEditorClient({
   );
   const isValid =
     name.trim().length > 0 &&
+    funnelRulesValid &&
     memberErrors.every((e) => e === null) &&
     draftMembers.every((m) => !duplicateNames.has(m.intent_name.trim().toLowerCase()));
 
@@ -221,6 +265,7 @@ export function RouterEditorClient({
         isActive !== baseline.isActive ||
         fallbackAgentId !== baseline.fallbackAgentId ||
         adAgentId !== baseline.adAgentId ||
+        funnelRulesChanged ||
         classifier !== baseline.classifier
       ) {
         const [provider, modelId] = classifier.split("::");
@@ -235,6 +280,7 @@ export function RouterEditorClient({
               ? { classifier_model: null, classifier_provider: null }
               : { classifier_model: modelId, classifier_provider: provider }),
             ad_origin_agent_id: adAgentId || null,
+            pipeline_agents: currentFunnelRules,
           },
         });
       }
@@ -415,6 +461,101 @@ export function RouterEditorClient({
                 )}
               </p>
             </div>
+          </Card>
+
+          <Card className="space-y-3 p-4" data-testid="roteador-funil">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="text-sm font-medium">{t("Quem está em um funil")}</h3>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "Quem tem negócio aberto no funil é atendido pelo agente escolhido, antes de o assunto ser avaliado. E esse agente passa a atender só quem está no funil: fora dele, ele não responde a ninguém neste número.",
+                  )}
+                </p>
+              </div>
+              {canManage && funnelRules.length < MAX_FUNNEL_RULES && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() =>
+                    setFunnelRules((prev) => [...prev, { key: randomId(), pipeline_id: "", agent_id: "" }])
+                  }
+                >
+                  <Plus /> {t("Funil")}
+                </Button>
+              )}
+            </div>
+            {funnelRules.length === 0 ? (
+              <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+                {t("Nenhum funil escolhido. O funil do contato não decide quem atende.")}
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {funnelRules.map((r) => (
+                  <li key={r.key} className="flex items-end gap-2" data-testid="roteador-funil-regra">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <Label>{t("Funil")}</Label>
+                      <Select
+                        value={r.pipeline_id || undefined}
+                        onValueChange={(v) =>
+                          setFunnelRules((prev) => prev.map((x) => (x.key === r.key ? { ...x, pipeline_id: v } : x)))
+                        }
+                        disabled={!canManage}
+                      >
+                        <SelectTrigger aria-invalid={duplicateFunnels.has(r.pipeline_id)}>
+                          <SelectValue placeholder={t("Selecione o funil")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {pipelines.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <Label>{t("Agente que atende")}</Label>
+                      <Select
+                        value={r.agent_id || undefined}
+                        onValueChange={(v) =>
+                          setFunnelRules((prev) => prev.map((x) => (x.key === r.key ? { ...x, agent_id: v } : x)))
+                        }
+                        disabled={!canManage}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={t("Selecione o agente")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {agents.map((a) => (
+                            <SelectItem key={a.id} value={a.id}>
+                              {a.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {canManage && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0"
+                        onClick={() => setFunnelRules((prev) => prev.filter((x) => x.key !== r.key))}
+                        aria-label={t("Remover funil")}
+                      >
+                        <Trash />
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {duplicateFunnels.size > 0 ? (
+              <p className="text-xs text-destructive">{t("Cada funil só pode ter um agente.")}</p>
+            ) : !funnelRulesValid ? (
+              <p className="text-xs text-destructive">{t("Escolha o funil e o agente de cada linha.")}</p>
+            ) : null}
           </Card>
 
           <TestPanel

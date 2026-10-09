@@ -25,7 +25,7 @@ export default async function RouterEditorPage({ params }: { params: Promise<{ i
 
   const supabase = await createClient();
 
-  const [{ data: routerRow }, { data: memberRows }, { data: agentRows }, channelSessions] =
+  const [{ data: routerRow }, { data: memberRows }, { data: agentRows }, { data: pipelineRows }, channelSessions] =
     await Promise.all([
       supabase
         .from("ai_routers")
@@ -45,6 +45,13 @@ export default async function RouterEditorPage({ params }: { params: Promise<{ i
         .eq("organization_id", activeOrg.orgId)
         .is("archived_at", null)
         .order("name", { ascending: true }),
+      // Funis para a regra "quem está num funil" (`config.pipeline_agents`).
+      supabase
+        .from("crm_pipelines")
+        .select("id, name")
+        .eq("organization_id", activeOrg.orgId)
+        .eq("is_archived", false)
+        .order("position", { ascending: true }),
       listSelectableChannels(supabase, activeOrg.orgId),
     ]);
 
@@ -70,6 +77,7 @@ export default async function RouterEditorPage({ params }: { params: Promise<{ i
         routerId={id}
         initialState={initialState}
         agents={agents}
+        pipelines={pipelineRows ?? []}
         channelSessions={channelSessions}
         classifierModels={classifierModels}
       />

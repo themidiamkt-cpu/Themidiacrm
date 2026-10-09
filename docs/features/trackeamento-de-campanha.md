@@ -86,6 +86,11 @@ nomeados, ou `utm_medium` de mídia paga).
   (`DIAS_DA_ORIGEM`, em `lib/agent-engine/agent/agente-da-origem.ts`); depois a conversa
   volta para a régua comum. Agente sem versão publicada, erro ou banco lento: segue pela
   régua comum.
+  Um degrau acima fica a regra de funil ("Quem está em um funil", em
+  `ai_routers.config.pipeline_agents`, `lib/agent-engine/agent/agente-do-funil.ts`): quem
+  tem negócio aberto num funil declarado é atendido pelo agente do funil, e esse agente não
+  atende quem está fora dele. Quando o agente da origem é um agente de funil e o contato
+  está fora do funil, a regra da origem é pulada e o assunto decide.
 - **Qual follow-up começa.** O gatilho "Lead criado" aceita `params.origem: "anuncio"`: o
   fluxo só inscreve quem chegou por anúncio (`lib/followup/gatilho-lead.ts`, contado em
   `fora_da_origem` quando o contato fica de fora).

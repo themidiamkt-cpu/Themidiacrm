@@ -50,6 +50,12 @@
  * de hoje (sem router) com outcome 'classifier_failed' + log.warn. Um lead
  * real está esperando resposta; o router é estritamente aditivo.
  *
+ * Regra de funil (`agente-do-funil.ts`): o contato com negócio aberto num funil
+ * que o roteador declarou vai para o agente do funil, abaixo da campanha e acima
+ * da origem e do assunto. E esse agente não atende quem está fora do funil: se
+ * qualquer degrau abaixo apontar para ele num contato de fora, o turno sai sem
+ * resposta — de propósito, é a segunda exceção à regra 5.
+ *
  * ⚠️ "silêncio não é desfecho possível" (regra 5) vale para os turnos que
  * CHEGAM aqui. O gate de elegibilidade (migration 0203, canal com
  * `metadata.ai_gate = 'allowlist'`) barra ANTES — no drain e no início do turno,
@@ -65,6 +71,12 @@ import type { Logger } from '../obs/logger';
 import type { LlmEdgeConfig } from '../edge/llm/run-model-call';
 import { agenteDaCampanhaDaConversa } from './agente-da-campanha';
 import { contatoDaConversaVeioDeAnuncio } from './agente-da-origem';
+import {
+  agenteDoFunil,
+  caladoNesteTurno,
+  foraDoFunilDoAgente,
+  funisAbertosDoContatoDaConversa,
+} from './agente-do-funil';
 import { loadActiveRouter, type LoadedRouter, type RouterMember } from './router-config';
 import {
   loadPublishedAgentConfig,
@@ -98,7 +110,9 @@ export interface TurnAgentResolution {
     /** A conversa nasceu de uma campanha que declarou agente (migration 0267). */
     | 'campanha'
     /** O contato chegou por anúncio e o roteador declarou quem atende essa origem. */
-    | 'origem';
+    | 'origem'
+    /** O contato tem negócio aberto num funil e o roteador declarou quem atende esse funil. */
+    | 'funil';
   /**
    * Fluxo de atendimento que o membro casado aponta (migration 0394; 0237 na branch do autor). O turno
    * começa o fluxo para o contato; `null` = nenhum. Só rótulos casados o trazem
@@ -113,6 +127,8 @@ export interface ResolveTurnAgentDeps {
   agenteDaCampanha?: typeof agenteDaCampanhaDaConversa;
   /** Injetável para o teste não precisar de banco. */
   veioDeAnuncio?: typeof contatoDaConversaVeioDeAnuncio;
+  /** Injetável para o teste não precisar de banco. */
+  funisAbertos?: typeof funisAbertosDoContatoDaConversa;
   loadActiveRouter?: typeof loadActiveRouter;
   loadPublishedAgentConfigById?: typeof loadPublishedAgentConfigById;
   loadPublishedAgentConfig?: typeof loadPublishedAgentConfig;
@@ -215,6 +231,11 @@ export async function resolveTurnAgent(
   const _classifyIntent = deps.classifyIntent ?? classifyIntent;
   const _consultarJev = deps.consultarJev ?? consultarJevNoRoteador;
 
+  // A trava do agente de funil (degrau 0a). Nasce inócua e passa a valer quando
+  // o roteador é lido; mora fora do `try` para o `catch` de baixo aplicá-la
+  // também, se o erro vier depois de as regras já serem conhecidas.
+  let soQuemEstaNoFunil = (r: TurnAgentResolution): TurnAgentResolution => r;
+
   try {
     // ─── Degrau 0: a campanha que criou esta conversa ───
     //
@@ -249,6 +270,51 @@ export async function resolveTurnAgent(
       };
     }
 
+    // ─── Degrau 0a: o funil do contato ───
+    //
+    // Abaixo da campanha, acima da origem e do assunto. Quem tem negócio aberto
+    // num funil que o roteador declarou é atendido pelo agente do funil, sem
+    // gastar o classificador. Regra em `agente-do-funil.ts`.
+    //
+    // `routerId: null`, como nos degraus vizinhos: não é decisão do
+    // classificador, não entra em `ai_router_decisions` nem fixa a conversa. A
+    // pergunta é refeita a cada turno, e deixa de valer quando o negócio fecha.
+    //
+    // Falha ABERTA para rotear (agente sem versão publicada, banco lento: segue
+    // pela régua do número) e FECHADA para a trava: o agente de funil nunca
+    // responde a quem não se confirmou dentro do funil.
+    const regrasDeFunil = router.pipelineAgents ?? [];
+    let funisDoContato: ReadonlySet<string> | null = null;
+    if (regrasDeFunil.length > 0) {
+      const _funisAbertos = deps.funisAbertos ?? funisAbertosDoContatoDaConversa;
+      funisDoContato = await _funisAbertos(db, input.tenantId, input.conversationId);
+      const funis = funisDoContato;
+      soQuemEstaNoFunil = (r) => {
+        if (r.config === null || !foraDoFunilDoAgente(regrasDeFunil, funis, r.config.agentId)) return r;
+        deps.log.info('agente que só atende quem está no funil dele, e o contato está fora: turno sem resposta', {
+          tenantId: input.tenantId,
+          conversationId: input.conversationId,
+          routerId: router.id,
+          agentId: r.config.agentId,
+          outcome: r.outcome,
+          funilConferido: funis !== null,
+        });
+        return { ...r, config: caladoNesteTurno(r.config), flowPointerId: null };
+      };
+      const doFunil = agenteDoFunil(regrasDeFunil, funis);
+      if (doFunil !== null) {
+        const config = await _loadAgentById(db, input.tenantId, doFunil);
+        if (config !== null) {
+          return { config, routerId: null, intentName: null, confidence: null, outcome: 'funil' };
+        }
+        deps.log.warn('agente do funil sem versão publicada; seguindo pela régua do número', {
+          tenantId: input.tenantId,
+          conversationId: input.conversationId,
+          routerId: router.id,
+        });
+      }
+    }
+
     // ─── Degrau 0b: a origem do contato ───
     //
     // Abaixo da campanha, acima do assunto. O roteador classifica a MENSAGEM, e
@@ -264,8 +330,11 @@ export async function resolveTurnAgent(
     //
     // Falha ABERTA: agente sem versão publicada devolve `null` e o turno segue
     // pela régua de sempre.
+    //
+    // Se o agente da origem é um agente de funil e o contato está fora do funil,
+    // o degrau não se aplica: o assunto decide, em vez de o turno calar.
     const agenteDaOrigem = router.adOriginAgentId ?? null;
-    if (agenteDaOrigem !== null) {
+    if (agenteDaOrigem !== null && !foraDoFunilDoAgente(regrasDeFunil, funisDoContato, agenteDaOrigem)) {
       const _veioDeAnuncio = deps.veioDeAnuncio ?? contatoDaConversaVeioDeAnuncio;
       if (await _veioDeAnuncio(db, input.tenantId, input.conversationId)) {
         const config = await _loadAgentById(db, input.tenantId, agenteDaOrigem);
@@ -361,9 +430,9 @@ export async function resolveTurnAgent(
     // regra 6: sem mensagem inbound (follow-up) — nunca classifica.
     if (input.signal === null) {
       if (stickyMember !== undefined) {
-        return loadMatchedOrFallback('sticky', stickyMember, input.stickyIntent, null);
+        return soQuemEstaNoFunil(await loadMatchedOrFallback('sticky', stickyMember, input.stickyIntent, null));
       }
-      return resolveFallback('no_match', null);
+      return soQuemEstaNoFunil(await resolveFallback('no_match', null));
     }
 
     // O Jev pergunta o mesmo, AO MESMO TEMPO (onda 2 do Jev, bloco 2.2): só a
@@ -417,20 +486,22 @@ export async function resolveTurnAgent(
       aIaCobriu: estadoDoJev === 'decidindo' && doJev === null,
     });
 
-    return destino.membro !== null
-      ? loadMatchedOrFallback(destino.outcome, destino.membro, destino.intentName, destino.confidence)
-      : resolveFallback(destino.outcome, destino.confidence);
+    return soQuemEstaNoFunil(
+      destino.membro !== null
+        ? await loadMatchedOrFallback(destino.outcome, destino.membro, destino.intentName, destino.confidence)
+        : await resolveFallback(destino.outcome, destino.confidence),
+    );
   } catch (err) {
     deps.log.warn('resolve-turn-agent: erro inesperado no router — turno cai no fluxo sem router', {
       error: err instanceof Error ? err.message : String(err),
     });
-    return {
+    return soQuemEstaNoFunil({
       config: await _loadAgentBySession(db, input.tenantId, input.channelSessionId),
       routerId: null,
       intentName: null,
       confidence: null,
       outcome: 'classifier_failed',
-    };
+    });
   }
 }
 

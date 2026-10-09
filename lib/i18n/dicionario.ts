@@ -3085,6 +3085,13 @@ export const DICIONARIO: Traducoes = {
   "Agente que atende quem veio de anúncio": { es: "Agente que atiende a quien vino de un anuncio" },
   "Nenhum — decide pelo assunto, como os demais": { es: "Ninguno — decide por el tema, como los demás" },
   "Vale para quem chegou por anúncio de clique para o WhatsApp ou por uma página com origem de campanha, nos primeiros 30 dias. Este agente atende desde a primeira mensagem, antes de o assunto ser avaliado. Depois do prazo, a conversa volta para as intenções acima.": { es: "Vale para quien llegó por un anuncio de clic a WhatsApp o por una página con origen de campaña, en los primeros 30 días. Este agente atiende desde el primer mensaje, antes de que se evalúe el tema. Después del plazo, la conversación vuelve a las intenciones de arriba." },
+  "Quem está em um funil": { es: "Quien está en un embudo" },
+  "Quem tem negócio aberto no funil é atendido pelo agente escolhido, antes de o assunto ser avaliado. E esse agente passa a atender só quem está no funil: fora dele, ele não responde a ninguém neste número.": { es: "Quien tiene un negocio abierto en el embudo es atendido por el agente elegido, antes de que se evalúe el tema. Y ese agente pasa a atender solo a quien está en el embudo: fuera de él, no responde a nadie en este número." },
+  "Nenhum funil escolhido. O funil do contato não decide quem atende.": { es: "Ningún embudo elegido. El embudo del contacto no decide quién atiende." },
+  "Selecione o funil": { es: "Selecciona el embudo" },
+  "Remover funil": { es: "Quitar embudo" },
+  "Cada funil só pode ter um agente.": { es: "Cada embudo solo puede tener un agente." },
+  "Escolha o funil e o agente de cada linha.": { es: "Elige el embudo y el agente de cada línea." },
   "Nenhum — responde com o atendimento padrão": { es: "Ninguno: responde con la atención estándar" },
   "Quando a IA não tem certeza do que o cliente quer, ela chama este agente em vez de travar a conversa.": {
     es: "Cuando la IA no está segura de lo que quiere el cliente, llama a este agente en vez de trabar la conversación.",

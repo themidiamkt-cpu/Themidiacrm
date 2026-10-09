@@ -16,6 +16,7 @@ import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { MAX_REGRAS_DE_FUNIL } from "@/lib/agent-engine/agent/agente-do-funil";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,16 @@ const patchRouterSchema = z.object({
   fallback_agent_id: z.string().uuid().nullable().optional(),
   config: z.record(z.string(), z.unknown()).optional(),
 });
+
+/**
+ * `config.pipeline_agents`: quem tem negócio aberto num funil é atendido por um
+ * agente, e esse agente não atende quem está fora dele (`agente-do-funil.ts`).
+ * `.strict()` para a linha gravada ter só as duas chaves que o worker lê.
+ */
+const regrasDeFunilSchema = z
+  .array(z.object({ pipeline_id: z.string().regex(UUID_RX), agent_id: z.string().regex(UUID_RX) }).strict())
+  .max(MAX_REGRAS_DE_FUNIL)
+  .refine((regras) => new Set(regras.map((r) => r.pipeline_id)).size === regras.length);
 
 // ---------------------------------------------------------------------------
 // GET
@@ -151,13 +162,54 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     }
   }
 
+  // `config.pipeline_agents` (agente de quem está num funil) também mora no
+  // jsonb. Mesma conferência: funil e agente precisam existir NESTA organização.
+  // `null` limpa a lista. O que é gravado é a forma conferida, nunca o corpo cru.
+  let regrasDeFunil: z.infer<typeof regrasDeFunilSchema> | undefined;
+  const regrasBrutas = patch.config?.pipeline_agents;
+  if (regrasBrutas !== undefined) {
+    const lidas = regrasDeFunilSchema.safeParse(regrasBrutas ?? []);
+    if (!lidas.success) {
+      return fail("validation_failed", t("Campos inválidos."), 422, { requestId });
+    }
+    regrasDeFunil = lidas.data;
+    const funis = [...new Set(regrasDeFunil.map((r) => r.pipeline_id))];
+    const agentes = [...new Set(regrasDeFunil.map((r) => r.agent_id))];
+    if (funis.length > 0) {
+      const [funisAchados, agentesAchados] = await Promise.all([
+        admin
+          .from("crm_pipelines")
+          .select("id")
+          .eq("organization_id", org.orgId)
+          .eq("is_archived", false)
+          .in("id", funis),
+        admin
+          .from("ai_agents")
+          .select("id")
+          .eq("organization_id", org.orgId)
+          .is("archived_at", null)
+          .in("id", agentes),
+      ]);
+      if (funisAchados.error || agentesAchados.error) {
+        return fail("internal_error", "Erro ao conferir o funil e o agente.", 500, { requestId });
+      }
+      if ((funisAchados.data ?? []).length !== funis.length || (agentesAchados.data ?? []).length !== agentes.length) {
+        return fail("validation_failed", t("Campos inválidos."), 422, { requestId });
+      }
+    }
+  }
+
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) update.name = patch.name;
   if (patch.is_active !== undefined) update.is_active = patch.is_active;
   if (patch.fallback_agent_id !== undefined) update.fallback_agent_id = patch.fallback_agent_id;
   if (patch.config !== undefined) {
     const currentConfig = (existing.config ?? {}) as Record<string, unknown>;
-    update.config = { ...currentConfig, ...patch.config };
+    update.config = {
+      ...currentConfig,
+      ...patch.config,
+      ...(regrasDeFunil !== undefined ? { pipeline_agents: regrasDeFunil } : {}),
+    };
   }
 
   if (Object.keys(update).length === 0) {
