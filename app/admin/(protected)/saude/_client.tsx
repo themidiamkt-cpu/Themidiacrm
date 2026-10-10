@@ -4,6 +4,7 @@ import { apiClient } from "@/lib/api/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { centavosParaDolar } from "@/lib/saude/avaliar";
 import { useT } from "@/hooks/i18n/useT";
+import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import type { SaudeData } from "@/app/api/v1/admin/saude/route";
 
 function Cartao({ titulo, valor, ruim }: { titulo: string; valor: string | number; ruim?: boolean }) {
@@ -17,6 +18,7 @@ function Cartao({ titulo, valor, ruim }: { titulo: string; valor: string | numbe
 
 export function SaudeClient() {
   const t = useT();
+  const tag = useTagDeIdioma();
   const { data, isLoading, isError, dataUpdatedAt } = useQuery({
     queryKey: ["admin", "saude"],
     queryFn: () => apiClient.get<{ data: SaudeData }>("/api/v1/admin/saude").then((r) => r.data),
@@ -39,7 +41,7 @@ export function SaudeClient() {
         <h1 className="text-2xl font-semibold tracking-tight">{t("Saúde da instalação")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {t("IA, WhatsApp, fila e follow-ups em um só lugar. Atualiza a cada minuto")}
-          {dataUpdatedAt ? ` (${new Date(dataUpdatedAt).toLocaleTimeString("pt-BR")})` : ""}.
+          {dataUpdatedAt ? ` (${new Date(dataUpdatedAt).toLocaleTimeString(tag)})` : ""}.
         </p>
       </div>
 
@@ -84,7 +86,7 @@ export function SaudeClient() {
                   <td className="p-2">{p.ok}</td>
                   <td className="p-2">{p.erros}</td>
                   <td className="p-2">{p.ultimo_erro_code ?? "—"}</td>
-                  <td className="p-2">{p.ultimo_ok_em ? new Date(p.ultimo_ok_em).toLocaleString("pt-BR") : "—"}</td>
+                  <td className="p-2">{p.ultimo_ok_em ? new Date(p.ultimo_ok_em).toLocaleString(tag) : "—"}</td>
                 </tr>
               ))}
               {data.provedores.length === 0 && (
