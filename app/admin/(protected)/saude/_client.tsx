@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { centavosParaDolar } from "@/lib/saude/avaliar";
+import { useT } from "@/hooks/i18n/useT";
 import type { SaudeData } from "@/app/api/v1/admin/saude/route";
 
 function Cartao({ titulo, valor, ruim }: { titulo: string; valor: string | number; ruim?: boolean }) {
@@ -15,6 +16,7 @@ function Cartao({ titulo, valor, ruim }: { titulo: string; valor: string | numbe
 }
 
 export function SaudeClient() {
+  const t = useT();
   const { data, isLoading, isError, dataUpdatedAt } = useQuery({
     queryKey: ["admin", "saude"],
     queryFn: () => apiClient.get<{ data: SaudeData }>("/api/v1/admin/saude").then((r) => r.data),
@@ -25,7 +27,7 @@ export function SaudeClient() {
   if (isError || !data) {
     return (
       <div className="rounded-lg border py-12 text-center text-sm text-muted-foreground">
-        Não foi possível carregar o painel de saúde.
+        {t("Não foi possível carregar o painel de saúde.")}
       </div>
     );
   }
@@ -34,17 +36,17 @@ export function SaudeClient() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Saúde da instalação</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("Saúde da instalação")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          IA, WhatsApp, fila e follow-ups em um só lugar. Atualiza a cada minuto
-          {dataUpdatedAt ? ` (última leitura ${new Date(dataUpdatedAt).toLocaleTimeString("pt-BR")})` : ""}.
+          {t("IA, WhatsApp, fila e follow-ups em um só lugar. Atualiza a cada minuto")}
+          {dataUpdatedAt ? ` (${new Date(dataUpdatedAt).toLocaleTimeString("pt-BR")})` : ""}.
         </p>
       </div>
 
       <section className="space-y-2">
         <h2 className="text-sm font-medium">Alertas</h2>
         {data.alertas.length === 0 ? (
-          <div className="rounded-lg border p-4 text-sm">Nenhum alerta agora.</div>
+          <div className="rounded-lg border p-4 text-sm">{t("Nenhum alerta agora.")}</div>
         ) : (
           data.alertas.map((a, i) => (
             <div
@@ -52,7 +54,7 @@ export function SaudeClient() {
               className={`rounded-lg border p-4 ${a.gravidade === "critico" ? "border-destructive/60" : ""}`}
             >
               <div className="text-sm font-medium">
-                {a.gravidade === "critico" ? "Crítico · " : "Atenção · "}
+                {a.gravidade === "critico" ? t("Crítico") : t("Atenção")}{" · "}
                 {a.titulo}
               </div>
               <div className="mt-1 text-sm text-muted-foreground">{a.detalhe}</div>
@@ -73,7 +75,7 @@ export function SaudeClient() {
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-muted-foreground">
-              <tr><th className="p-2">Provedor</th><th className="p-2">Ok</th><th className="p-2">Erros</th><th className="p-2">Último erro</th><th className="p-2">Última chamada ok</th></tr>
+              <tr><th className="p-2">Provedor</th><th className="p-2">Ok</th><th className="p-2">Erros</th><th className="p-2">{t("Último erro")}</th><th className="p-2">{t("Última chamada ok")}</th></tr>
             </thead>
             <tbody>
               {data.provedores.map((p) => (
@@ -86,7 +88,7 @@ export function SaudeClient() {
                 </tr>
               ))}
               {data.provedores.length === 0 && (
-                <tr><td className="p-2 text-muted-foreground" colSpan={5}>Nenhuma chamada de IA nas últimas 24 h.</td></tr>
+                <tr><td className="p-2 text-muted-foreground" colSpan={5}>{t("Nenhuma chamada de IA nas últimas 24 h.")}</td></tr>
               )}
             </tbody>
           </table>
@@ -98,7 +100,7 @@ export function SaudeClient() {
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-muted-foreground">
-              <tr><th className="p-2">Organização</th><th className="p-2">Canal</th><th className="p-2">Status</th><th className="p-2">Falhas</th><th className="p-2">IA aberta ao público</th></tr>
+              <tr><th className="p-2">{t("Organização")}</th><th className="p-2">Canal</th><th className="p-2">Status</th><th className="p-2">{t("Falhas")}</th><th className="p-2">{t("IA aberta ao público")}</th></tr>
             </thead>
             <tbody>
               {data.canais.map((k) => (
@@ -107,7 +109,7 @@ export function SaudeClient() {
                   <td className="p-2">{k.nome}</td>
                   <td className="p-2">{k.status}</td>
                   <td className="p-2">{k.falhas_seguidas}</td>
-                  <td className="p-2">{k.ia_aberta ? "sim" : "não"}</td>
+                  <td className="p-2">{k.ia_aberta ? t("sim") : t("não")}</td>
                 </tr>
               ))}
             </tbody>

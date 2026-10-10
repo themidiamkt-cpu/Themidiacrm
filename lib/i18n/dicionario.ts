@@ -13770,6 +13770,15 @@ export const DICIONARIO: Traducoes = {
   "Não dá para ver daqui": { es: "No se puede ver desde aquí" },
   "Ajustar": { es: "Ajustar" },
   "Tudo o que se liga e desliga, se está ligado e onde se ajusta.": { es: "Todo lo que se activa y desactiva, si está activado y dónde se ajusta." },
+  "Não foi possível carregar o painel de saúde.": { es: "No fue posible cargar el panel de salud." },
+  "Saúde da instalação": { es: "Salud de la instalación" },
+  "IA, WhatsApp, fila e follow-ups em um só lugar. Atualiza a cada minuto": { es: "IA, WhatsApp, cola y seguimientos en un solo lugar. Se actualiza cada minuto" },
+  "Nenhum alerta agora.": { es: "Ninguna alerta ahora." },
+  "Último erro": { es: "Último error" },
+  "Última chamada ok": { es: "Última llamada correcta" },
+  "Nenhuma chamada de IA nas últimas 24 h.": { es: "Ninguna llamada de IA en las últimas 24 h." },
+  "sim": { es: "sí" },
+  "não": { es: "no" },
 };
 
 /**
