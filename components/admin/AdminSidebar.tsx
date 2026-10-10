@@ -42,6 +42,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/tenants", label: "Tenants", icon: Buildings },
   { href: "/admin/audit", label: "Audit", icon: ClipboardText },
   { href: "/admin/lgpd", label: "LGPD", icon: Scales },
+  { href: "/admin/saude", label: "Saúde", icon: Gauge },
   { href: "/admin/incidents", label: "Incidents", icon: Warning },
   { href: "/admin/usage", label: "Usage", icon: ChartBar },
   { href: "/admin/users", label: "Users", icon: Users },
