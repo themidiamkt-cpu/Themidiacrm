@@ -24,7 +24,9 @@ import {
   motivosDePerdaDoFunil,
   razaoNaLinhaDoTempo,
   SISTEMA_DO_ORGANIZADOR,
+  perdaPermitidaNaParada,
   SQL_DAS_CANDIDATAS,
+  SQL_DAS_PARADAS,
   tickOrganizadorDeFunil,
   type EtapaDoOrganizador,
   type MensagemDaConversa,
@@ -221,10 +223,85 @@ describe("as candidatas", () => {
   });
 });
 
+
+describe("os cartões parados", () => {
+  const PERDA = etapa("perdeu", "Não fechou", { is_lost: true });
+  const AGORA = new Date("2026-10-20T12:00:00Z");
+
+  it("a consulta: sem follow-up vivo, sem agente atribuído, funil ligado, e não relê quem foi lido", () => {
+    expect(SQL_DAS_PARADAS).toContain("p.settings->'organizador'->>'ligado' = 'true'");
+    expect(SQL_DAS_PARADAS).toContain("c.active_ai_agent_id is null");
+    expect(SQL_DAS_PARADAS).toContain("from followup_enrollments e");
+    expect(SQL_DAS_PARADAS).toContain("'active','waiting_reply','dormente','paused_handoff','paused_manual','coletando'");
+    expect(SQL_DAS_PARADAS).toContain("k.purpose = 'funnel_organizer'");
+    expect(SQL_DAS_PARADAS).toContain("cc.is_group is not true");
+    // conversa de prospecção nasce 'ai_handling' sem agente: não pode ser motivo de exclusão
+    expect(SQL_DAS_PARADAS).not.toContain("status <> 'ai_handling'");
+  });
+
+  it("perda só quando o cliente não escreveu no período parado", () => {
+    const base = { para: PERDA, agora: AGORA, diasParado: 5 };
+    expect(perdaPermitidaNaParada({ ...base, ultimaRespostaDoCliente: null })).toBe(true);
+    expect(perdaPermitidaNaParada({ ...base, ultimaRespostaDoCliente: new Date("2026-10-10T12:00:00Z") })).toBe(true);
+    expect(perdaPermitidaNaParada({ ...base, ultimaRespostaDoCliente: new Date("2026-10-18T12:00:00Z") })).toBe(false);
+    // etapa que não é de perda nunca é barrada por esta regra
+    expect(
+      perdaPermitidaNaParada({ ...base, para: etapa("a", "A"), ultimaRespostaDoCliente: new Date("2026-10-19T12:00:00Z") }),
+    ).toBe(true);
+  });
+
+  it("o pedido diz que o cartão está parado, e só na varredura", () => {
+    const comum = {
+      funil: "Clínicas",
+      etapas: FUNIL,
+      etapaAtualId: "conversa",
+      instrucoes: "",
+      motivosDePerda: MOTIVOS,
+      conversa: "Equipe: oi",
+      agora: AGORA,
+    };
+    expect(montarPedido({ ...comum, diasParado: 5 })).toContain("CARTÃO PARADO há 5 dias");
+    expect(montarPedido(comum)).not.toContain("CARTÃO PARADO");
+    expect(SISTEMA_DO_ORGANIZADOR).toContain("CARTÃO PARADO");
+  });
+
+  it("move o cartão parado quando a conversa pede, e marca perda se o cliente nunca respondeu", async () => {
+    moveLeadHandler.mockReset();
+    runModelCall.mockReset();
+    runModelCall.mockResolvedValue({
+      result: { text: '{"etapa": 6, "motivo": "Sem resposta depois de dois contatos.", "motivo_da_perda": "no_response"}' },
+    });
+    const { pool } = poolFalso({
+      paradas: [{ ...CANDIDATA, conversation_id: "conv-parada", dias_parado: 5 }],
+      negocios: [NEGOCIO],
+      mensagens: [msg({ direction: "outbound", body: "Oi! Posso ajudar?", sent_via: "external_device" })],
+    });
+    const r = await tickOrganizadorDeFunil(pool as never, {} as never, { agora: AGORA });
+    expect(r).toMatchObject({ paradasLidas: 1, analisadas: 1, movidas: 1 });
+    expect(runModelCall.mock.calls[0]![2].messages[0].content).toContain("CARTÃO PARADO há 5 dias");
+    expect(moveLeadHandler.mock.calls[0]![3]).toMatchObject({ to_stage_id: "perdeu" });
+  });
+
+  it("com resposta do cliente no período, a IA não marca perda: o cartão fica", async () => {
+    moveLeadHandler.mockReset();
+    runModelCall.mockReset();
+    runModelCall.mockResolvedValue({ result: { text: '{"etapa": 6, "motivo": "Parou de falar."}' } });
+    const { pool } = poolFalso({
+      paradas: [{ ...CANDIDATA, conversation_id: "conv-parada-2", dias_parado: 5 }],
+      negocios: [NEGOCIO],
+      mensagens: [msg({ direction: "inbound", body: "vou ver e te falo", created_at: "2026-10-18T10:00:00Z" })],
+    });
+    const r = await tickOrganizadorDeFunil(pool as never, {} as never, { agora: AGORA });
+    expect(r).toMatchObject({ paradasLidas: 1, movidas: 0, mantidas: 1 });
+    expect(moveLeadHandler).not.toHaveBeenCalled();
+  });
+});
+
 // ─────────────────────────────────────────────────────────────── a rodada
 function poolFalso(opcoes: {
   travou?: boolean;
   candidatas?: unknown[];
+  paradas?: unknown[];
   negocios?: unknown[];
   mensagens?: unknown[];
   etapaAgora?: string;
@@ -234,6 +311,7 @@ function poolFalso(opcoes: {
     consultas.push(sql);
     if (/pg_try_advisory_lock/.test(sql)) return { rows: [{ ok: opcoes.travou ?? true }] };
     if (/pg_advisory_unlock/.test(sql)) return { rows: [] };
+    if (/with funis as/.test(sql)) return { rows: opcoes.paradas ?? [] };
     if (/from conversations c/.test(sql)) return { rows: opcoes.candidatas ?? [] };
     if (/from crm_leads l\s+join crm_pipelines/.test(sql)) return { rows: opcoes.negocios ?? [] };
     if (/from messages/.test(sql)) return { rows: opcoes.mensagens ?? [] };
