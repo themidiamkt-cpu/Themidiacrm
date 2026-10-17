@@ -55,6 +55,12 @@ interface OpcoesDeMove {
    * em que o card foi solto. Sem esta opção, cai no toast de sempre.
    */
   onRetomada?: (retomada: RetomadaPendente) => void;
+  /**
+   * Depois que o servidor CONFIRMOU a mudança de etapa (não no arrastar, que é
+   * otimista e pode ser recusado). É por aqui que a tela reage ao destino — por
+   * exemplo abrindo a agenda quando o negócio chega em "Diagnóstico marcado".
+   */
+  onMovido?: (args: MoveArgs) => void;
 }
 
 export function useMoveCard(pipelineId: string, opcoes: OpcoesDeMove = {}) {
@@ -101,6 +107,7 @@ export function useMoveCard(pipelineId: string, opcoes: OpcoesDeMove = {}) {
             }
           : atual,
       );
+      opcoes.onMovido?.(args);
     },
     onError: (err, args, ctx) => {
       if (ctx?.snapshot) qc.setQueryData(queryKey, ctx.snapshot);

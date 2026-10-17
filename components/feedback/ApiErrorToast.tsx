@@ -137,7 +137,49 @@ const COPY: Record<string, { variant: Variant; msg?: string }> = {
  * `variables` no lugar (foi exatamente o que aconteceu e quebrou o typecheck
  * em cadeia da primeira tentativa).
  */
+/**
+ * RUÍDO DE FUNDO NÃO VIRA TOAST.
+ *
+ * Quando o banco ou a rede oscilam, cada consulta que roda sozinha (contadores,
+ * polling, atualização de tela) falha e levantava "Erro inesperado. Tente
+ * novamente." — sem a pessoa ter feito nada e sem nada que ela pudesse tentar de
+ * novo. Medido em produção em 15–16/10/2026, durante as quedas do Supabase: o
+ * aviso aparecia no Inbox e nos Funis com a tela parada.
+ *
+ * A regra: o aviso GENÉRICO (erro que não é da API) e o de gateway (502/503/504)
+ * só aparecem se a pessoa mexeu na tela há pouco — aí a falha é da ação dela e
+ * ela precisa saber. Sem interação recente, vai só para o console. Erro da API
+ * com mensagem própria (validação, permissão, conflito) continua aparecendo
+ * sempre: esse a pessoa consegue resolver.
+ */
+const JANELA_DE_INTERACAO_MS = 6_000;
+let ultimaInteracaoEm = 0;
+
+/** A pessoa mexeu na tela agora (clique, toque ou tecla). */
+export function registrarInteracaoDaPessoa(): void {
+  ultimaInteracaoEm = Date.now();
+}
+
+if (typeof window !== "undefined") {
+  for (const evento of ["pointerdown", "keydown"] as const) {
+    window.addEventListener(evento, registrarInteracaoDaPessoa, { capture: true, passive: true });
+  }
+}
+
+function houveInteracaoRecente(): boolean {
+  return Date.now() - ultimaInteracaoEm < JANELA_DE_INTERACAO_MS;
+}
+
+function ehFalhaDeInfraestrutura(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return true;
+  return err.status === 502 || err.status === 503 || err.status === 504;
+}
+
 function toastFor(err: unknown, t: (texto: string) => string): void {
+  if (ehFalhaDeInfraestrutura(err) && !houveInteracaoRecente()) {
+    console.warn("[api] falha silenciada (sem ação da pessoa):", err);
+    return;
+  }
   if (err instanceof ApiError) {
     const entry = COPY[err.code];
     const description = err.requestId ? `ID: ${err.requestId}` : undefined;

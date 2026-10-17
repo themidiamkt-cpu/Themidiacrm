@@ -123,6 +123,43 @@ describe("ConversationHeader — chamada de voz na Inbox", () => {
   });
 });
 
+describe("ConversationHeader — Agendar reunião", () => {
+  const contato = {
+    id: "contato-1",
+    display_name: "Raphael",
+    name: "Raphael",
+    phone_number: "+5511999999999",
+    tags: [],
+    is_blocked: false,
+    is_anonymized: false,
+  };
+
+  it("abre a agenda ao lado já com o contato e a conversa", async () => {
+    const user = userEvent.setup();
+    const aberta = vi.fn(() => ({ focus: vi.fn() }));
+    vi.stubGlobal("open", aberta);
+    const atual = conversa("open");
+    atual.contacts = contato;
+    render(<ConversationHeader conversation={atual} />);
+
+    await user.click(screen.getByRole("button", { name: "Agendar reunião" }));
+
+    expect(aberta).toHaveBeenCalledTimes(1);
+    const [url, nome] = aberta.mock.calls[0] as unknown as [string, string];
+    expect(url).toBe(`/app/agenda?contato=contato-1&conversa=${atual.id}`);
+    expect(nome).toBe("agenda-marcar");
+    vi.unstubAllGlobals();
+  });
+
+  it("não aparece em grupo", () => {
+    const atual = conversa("open");
+    atual.is_group = true;
+    atual.contacts = contato;
+    render(<ConversationHeader conversation={atual} />);
+    expect(screen.queryByRole("button", { name: "Agendar reunião" })).toBeNull();
+  });
+});
+
 describe("ConversationHeader — Fechar e Arquivar por AlertDialog", () => {
   it("Fechar pede confirmação e só encerra no clique de dentro do diálogo", async () => {
     const user = userEvent.setup();

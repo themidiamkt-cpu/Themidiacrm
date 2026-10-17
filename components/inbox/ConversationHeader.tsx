@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { JanelaSelo } from "@/components/inbox/JanelaSelo";
 import { ChannelLogo } from "@/components/inbox/ChannelLogo";
-import { Phone, ArrowRight, MagnifyingGlass } from "@/lib/ui/icons";
+import { Phone, ArrowRight, MagnifyingGlass, CalendarPlus } from "@/lib/ui/icons";
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
 import { useReleaseConversation } from "@/hooks/inbox/useReleaseConversation";
@@ -35,6 +35,7 @@ import { SnoozeButton } from "@/components/inbox/SnoozeButton";
 import { DialButton } from "@/components/voice/DialButton";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
+import { abrirAgendaAoLado, urlDaMarcacao } from "@/lib/agenda/marcar-ao-lado";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 
 interface Props {
@@ -249,6 +250,23 @@ export function ConversationHeader({
             outro canal. Grupos não representam uma pessoa para ligar. */}
         {!conversation.is_group && c?.id && (
           <DialButton contactId={c.id} hasPhone={!!c.phone_number} />
+        )}
+        {/* Marcar reunião sem sair da conversa: abre a agenda numa janela ao
+            lado, com este cliente e esta conversa já vinculados. */}
+        {!conversation.is_group && c?.id && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            data-testid="agendar-reuniao"
+            onClick={() => {
+              const url = urlDaMarcacao(c.id, conversation.id);
+              if (!abrirAgendaAoLado(url)) window.location.assign(url);
+            }}
+          >
+            <CalendarPlus size={14} aria-hidden />
+            {t("Agendar reunião")}
+          </Button>
         )}
         {isOpen && (
           <Button

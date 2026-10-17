@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ApiError } from "@/lib/api/types";
 
 vi.mock("sonner", () => ({
@@ -11,7 +11,7 @@ vi.mock("sonner", () => ({
 }));
 
 import { toast } from "sonner";
-import { showApiError } from "@/components/feedback/ApiErrorToast";
+import { registrarInteracaoDaPessoa, showApiError } from "@/components/feedback/ApiErrorToast";
 
 describe("ApiErrorToast", () => {
   beforeEach(() => {
@@ -105,8 +105,45 @@ describe("ApiErrorToast", () => {
   });
 
   it("calls toast.error with generic message for non-ApiError", () => {
+    registrarInteracaoDaPessoa();
     showApiError(new Error("oops"));
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(toast.error).toHaveBeenCalledWith("Erro inesperado. Tente novamente.");
+  });
+
+  describe("ruído de fundo não vira toast", () => {
+    beforeEach(() => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2030-01-01T12:00:00Z"));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    it("erro genérico sem a pessoa ter mexido na tela fica só no console", () => {
+      vi.setSystemTime(new Date("2030-01-01T12:10:00Z"));
+      showApiError(new Error("Failed to fetch"));
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it("gateway (503) sem interação recente também fica calado", () => {
+      vi.setSystemTime(new Date("2030-01-01T12:20:00Z"));
+      showApiError(new ApiError(503, "service_unavailable", undefined, "req-1", "Service Unavailable"));
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it("o mesmo erro logo depois de um clique aparece", () => {
+      registrarInteracaoDaPessoa();
+      showApiError(new Error("Failed to fetch"));
+      expect(toast.error).toHaveBeenCalledTimes(1);
+    });
+
+    it("erro com mensagem própria da API aparece sempre, mesmo sem interação", () => {
+      vi.setSystemTime(new Date("2030-01-01T12:30:00Z"));
+      showApiError(new ApiError(403, "forbidden", undefined, "req-2", "Sem permissão."));
+      expect(toast.error).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd";
 import { useT } from "@/hooks/i18n/useT";
 import { Card } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { CamposObrigatoriosDialog } from "./CamposObrigatoriosDialog";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useAtRiskLeads } from "@/hooks/leads/useAtRiskLeads";
 import { useReactivations } from "@/hooks/leads/useReactivations";
+import { abrirAgendaAoLado, ehEtapaDeDiagnosticoMarcado, urlDaMarcacao } from "@/lib/agenda/marcar-ao-lado";
 import { midpoint } from "@/lib/kanban/fractional-indexing";
 import type { Lead } from "@/lib/types/leads";
 import type { Pipeline, Stage } from "@/lib/kanban/types";
@@ -100,9 +102,13 @@ export function KanbanBoard({
   // esta opção só troca o destino do erro.
   const [recusaDeCampos, setRecusaDeCampos] = useState<RecusaDeCampos | null>(null);
   const [retomada, setRetomada] = useState<RetomadaPendente | null>(null);
+  // O que fazer DEPOIS que o servidor confirmou a mudança de etapa. Fica numa
+  // ref porque o hook nasce antes de `data` existir; é preenchida logo abaixo.
+  const aoMoverRef = useRef<((args: { leadId: string; stageId: string }) => void) | null>(null);
   const moveCard = useMoveCard(pipelineId, {
     onCamposFaltando: setRecusaDeCampos,
     onRetomada: setRetomada,
+    onMovido: (args) => aoMoverRef.current?.(args),
   });
   const { data: members } = useAssignableMembers(true);
   const ownerNames = useMemo(
@@ -162,6 +168,33 @@ export function KanbanBoard({
   const isLoading = useExternal ? false : queryResult.isLoading;
   const isError = useExternal ? false : queryResult.isError;
   const error = useExternal ? null : queryResult.error;
+
+  // Negócio que chega em "Diagnóstico marcado" abre a agenda numa janela ao
+  // lado, já com o cliente, para pôr o horário sem sair do quadro. Se o
+  // navegador bloquear a janela, o aviso traz o botão (o clique é o gesto que
+  // o navegador aceita).
+  useEffect(() => {
+    aoMoverRef.current = ({ leadId, stageId }) => {
+      const etapa = data?.stages.find((e) => e.id === stageId);
+      if (!ehEtapaDeDiagnosticoMarcado(etapa?.name)) return;
+      const lead = data?.leads.find((l) => l.id === leadId);
+      if (!lead?.contact_id) {
+        toast.info(t("Este negócio não tem contato para marcar na agenda."));
+        return;
+      }
+      const url = urlDaMarcacao(lead.contact_id, lead.conversa?.id);
+      if (abrirAgendaAoLado(url)) return;
+      toast(t("Diagnóstico marcado: falta pôr na agenda."), {
+        duration: 15_000,
+        action: {
+          label: t("Marcar na agenda"),
+          onClick: () => {
+            if (!abrirAgendaAoLado(url)) window.location.assign(url);
+          },
+        },
+      });
+    };
+  });
 
   const leadDoDossie = dossieId
     ? (data?.leads.find((l) => l.id === dossieId) ?? null)
