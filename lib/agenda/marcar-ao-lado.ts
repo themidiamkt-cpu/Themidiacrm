@@ -24,15 +24,36 @@ function normalizar(texto: string): string {
 }
 
 /**
- * A etapa em que o diagnóstico/reunião JÁ foi combinado e falta pôr na agenda:
- * "Diagnóstico marcado", "Diagnóstico agendado". Compara sem acento e sem
- * maiúsculas, e exige as duas palavras — "Diagnóstico curto" ou "Marcado" sozinho
- * não abrem janela.
+ * A etapa em que o horário JÁ foi combinado e falta pôr na agenda: "Agendado",
+ * "Diagnóstico marcado", "Consulta marcada"… Compara sem acento e sem maiúsculas,
+ * palavra por palavra. Medido na clínica (16/10/2026): o funil "Pacientes" chama
+ * a etapa só de "Agendado", e a regra anterior (exigia "diagnóstico" + "marcado")
+ * não abria nada.
+ *
+ * Palavras que anulam: "não agendado", "desmarcado", "cancelado", "faltou",
+ * "reagendar" — são etapas em que NÃO há horário a marcar.
  */
-export function ehEtapaDeDiagnosticoMarcado(nome: string | null | undefined): boolean {
+const PALAVRAS_DE_HORARIO_COMBINADO = ["agendado", "agendada", "marcado", "marcada"];
+const PALAVRAS_QUE_ANULAM = [
+  "nao",
+  "sem",
+  "desmarcado",
+  "desmarcada",
+  "cancelado",
+  "cancelada",
+  "faltou",
+  "falta",
+  "reagendar",
+  "remarcar",
+];
+
+export function ehEtapaDeAgendamento(nome: string | null | undefined): boolean {
   if (!nome) return false;
-  const n = normalizar(nome);
-  return n.includes("diagnostico") && (n.includes("marcad") || n.includes("agendad"));
+  const palavras = normalizar(nome)
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  if (palavras.some((p) => PALAVRAS_QUE_ANULAM.includes(p))) return false;
+  return palavras.some((p) => PALAVRAS_DE_HORARIO_COMBINADO.includes(p));
 }
 
 /** O endereço da agenda já com o cliente (e a conversa, quando há) preenchidos. */

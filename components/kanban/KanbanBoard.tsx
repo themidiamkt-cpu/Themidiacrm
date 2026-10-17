@@ -12,7 +12,10 @@ import { CamposObrigatoriosDialog } from "./CamposObrigatoriosDialog";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useAtRiskLeads } from "@/hooks/leads/useAtRiskLeads";
 import { useReactivations } from "@/hooks/leads/useReactivations";
-import { abrirAgendaAoLado, ehEtapaDeDiagnosticoMarcado, urlDaMarcacao } from "@/lib/agenda/marcar-ao-lado";
+import { abrirAgendaAoLado, ehEtapaDeAgendamento, urlDaMarcacao } from "@/lib/agenda/marcar-ao-lado";
+import { acharEtapaPosVenda, ehEtapaDeFechamento } from "@/lib/procedimentos/etapas";
+import { useProcedimentos } from "@/hooks/procedimentos/useProcedimentos";
+import { ProcedimentosRealizadosDialog } from "./ProcedimentosRealizadosDialog";
 import { midpoint } from "@/lib/kanban/fractional-indexing";
 import type { Lead } from "@/lib/types/leads";
 import type { Pipeline, Stage } from "@/lib/kanban/types";
@@ -105,6 +108,9 @@ export function KanbanBoard({
   // O que fazer DEPOIS que o servidor confirmou a mudança de etapa. Fica numa
   // ref porque o hook nasce antes de `data` existir; é preenchida logo abaixo.
   const aoMoverRef = useRef<((args: { leadId: string; stageId: string }) => void) | null>(null);
+  // "Fechou" + catálogo de procedimentos → pergunta o que foi realizado e leva o cartão ao pós-venda.
+  const [fechamento, setFechamento] = useState<{ leadId: string } | null>(null);
+  const { data: catalogoDeProcedimentos } = useProcedimentos();
   const moveCard = useMoveCard(pipelineId, {
     onCamposFaltando: setRecusaDeCampos,
     onRetomada: setRetomada,
@@ -169,14 +175,22 @@ export function KanbanBoard({
   const isError = useExternal ? false : queryResult.isError;
   const error = useExternal ? null : queryResult.error;
 
-  // Negócio que chega em "Diagnóstico marcado" abre a agenda numa janela ao
+  // Negócio que chega numa etapa de horário combinado ("Agendado", "Diagnóstico marcado") abre a agenda numa janela ao
   // lado, já com o cliente, para pôr o horário sem sair do quadro. Se o
   // navegador bloquear a janela, o aviso traz o botão (o clique é o gesto que
   // o navegador aceita).
   useEffect(() => {
     aoMoverRef.current = ({ leadId, stageId }) => {
       const etapa = data?.stages.find((e) => e.id === stageId);
-      if (!ehEtapaDeDiagnosticoMarcado(etapa?.name)) return;
+      if (etapa && ehEtapaDeFechamento(etapa)) {
+        // Só em funil de quem cadastrou procedimentos (a agência, sem catálogo, não vê nada),
+        // e só com contato: o procedimento é do paciente.
+        const temCatalogo = (catalogoDeProcedimentos ?? []).some((p) => p.ativo);
+        const lead = data?.leads.find((l) => l.id === leadId);
+        if (temCatalogo && lead?.contact_id) setFechamento({ leadId });
+        return;
+      }
+      if (!ehEtapaDeAgendamento(etapa?.name)) return;
       const lead = data?.leads.find((l) => l.id === leadId);
       if (!lead?.contact_id) {
         toast.info(t("Este negócio não tem contato para marcar na agenda."));
@@ -184,7 +198,7 @@ export function KanbanBoard({
       }
       const url = urlDaMarcacao(lead.contact_id, lead.conversa?.id);
       if (abrirAgendaAoLado(url)) return;
-      toast(t("Diagnóstico marcado: falta pôr na agenda."), {
+      toast(t("Agendado: falta pôr o horário na agenda."), {
         duration: 15_000,
         action: {
           label: t("Marcar na agenda"),
@@ -349,6 +363,32 @@ export function KanbanBoard({
           ownerNames={ownerNames}
         />
       )}
+
+      {fechamento &&
+        (() => {
+          const lead = data.leads.find((l) => l.id === fechamento.leadId);
+          const posVenda = acharEtapaPosVenda(data.stages, pipelineId);
+          return (
+            <ProcedimentosRealizadosDialog
+              lead={lead ? { id: lead.id, title: lead.title } : null}
+              posVenda={posVenda ? { id: posVenda.id, name: posVenda.name } : null}
+              onClose={() => setFechamento(null)}
+              onRegistrado={() => {
+                setFechamento(null);
+                if (!lead || !posVenda || lead.stage_id === posVenda.id) return;
+                const destino = data.leads.filter((l) => l.stage_id === posVenda.id && l.id !== lead.id);
+                const ultima = destino.reduce((m, l) => Math.max(m, l.position_in_stage ?? 0), 0);
+                const posicao = midpoint(ultima > 0 ? ultima : null, null);
+                moveCard.mutate({
+                  leadId: lead.id,
+                  stageId: posVenda.id,
+                  positionInStage: Number.isNaN(posicao) ? ultima + 1000 : posicao,
+                  expectedUpdatedAt: lead.updated_at,
+                });
+              }}
+            />
+          );
+        })()}
 
       <CamposObrigatoriosDialog
         open={recusaDeCampos !== null}

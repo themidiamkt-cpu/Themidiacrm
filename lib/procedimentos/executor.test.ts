@@ -178,7 +178,7 @@ describe("tickProcedimentos", () => {
   it("contato sem telefone ou bloqueado: encerra sem enviar", async () => {
     const semTel = mundo({ contato: { id: "c", name: "M", phone_number: null, is_blocked: false, is_anonymized: false } });
     await tickProcedimentos(bancoDeMentira(semTel) as never, { agora: AGORA });
-    expect(atualizacoes[0]!.dados).toEqual({ lembrete_resultado: "sem_telefone" });
+    expect(atualizacoes[0]!.dados).toEqual({ lembrete_resultado: "sem_numero" });
     atualizacoes.length = 0;
     const bloq = mundo({ contato: { id: "c", name: "M", phone_number: "+55", is_blocked: true, is_anonymized: false } });
     await tickProcedimentos(bancoDeMentira(bloq) as never, { agora: AGORA });

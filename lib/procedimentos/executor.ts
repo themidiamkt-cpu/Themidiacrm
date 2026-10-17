@@ -188,8 +188,8 @@ export async function tickProcedimentos(
       continue;
     }
     if (!contato.phone_number) {
-      await encerrar(linha, "sem_telefone");
-      pular("sem_telefone");
+      await encerrar(linha, "sem_numero");
+      pular("sem_numero");
       continue;
     }
 

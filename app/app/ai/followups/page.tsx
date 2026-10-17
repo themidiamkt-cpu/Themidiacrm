@@ -8,6 +8,7 @@ import type { FollowupFlowPointerRow } from "@/hooks/followup/useFollowupFlows";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FlowsList } from "./_components/FlowsList";
 import { QueueTab } from "./_components/QueueTab";
+import { RetornosNaFila, RetornosNosFluxos } from "@/components/followups/RetornosDeProcedimentos";
 
 export const dynamic = "force-dynamic";
 
@@ -52,9 +53,12 @@ export default async function FollowupFlowsPage() {
           <TabsTrigger value="fila">Fila</TabsTrigger>
         </TabsList>
         <TabsContent value="fluxos">
+          {/* O retorno automático de procedimentos aparece junto dos fluxos. */}
+          <RetornosNosFluxos canWrite={canWrite} />
           <FlowsList initialData={flows} canWrite={canWrite} />
         </TabsContent>
         <TabsContent value="fila">
+          <RetornosNaFila />
           <QueueTab canWrite={canWrite} />
         </TabsContent>
       </Tabs>
