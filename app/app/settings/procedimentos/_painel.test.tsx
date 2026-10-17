@@ -71,4 +71,19 @@ describe("PainelDeProcedimentos", () => {
     expect(screen.getByText(/Volta a cada 6 meses/)).toBeInTheDocument();
     expect(screen.getByText(/depois vai para Cliente/)).toBeInTheDocument();
   });
+
+  it("procedimento novo já vem apontando para a etapa 'Retorno' (e só sugere: dá para trocar)", () => {
+    render(<PainelDeProcedimentos etapas={ETAPAS} />);
+    fireEvent.click(screen.getByTestId("novo-procedimento"));
+    const seletor = screen.getByLabelText("Depois de enviar, mover o lead para") as HTMLSelectElement;
+    expect(seletor.value).toBe("e1");
+    fireEvent.change(seletor, { target: { value: "e2" } });
+    expect(seletor.value).toBe("e2");
+  });
+
+  it("sem etapa 'Retorno' no funil, nada vem escolhido", () => {
+    render(<PainelDeProcedimentos etapas={[{ id: "e2", nome: "Cliente", funilId: "f2", funil: "Clientes" }]} />);
+    fireEvent.click(screen.getByTestId("novo-procedimento"));
+    expect((screen.getByLabelText("Depois de enviar, mover o lead para") as HTMLSelectElement).value).toBe("");
+  });
 });

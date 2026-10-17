@@ -21,6 +21,7 @@ function formatError(err: unknown, t: (texto: string) => string): string {
   return String(err);
 }
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
+import { SeletorDeFunil } from "@/components/kanban/SeletorDeFunil";
 import { FilterBar } from "@/components/kanban/FilterBar";
 import { BulkActionBar } from "@/components/kanban/BulkActionBar";
 import { NewLeadDialog } from "@/components/kanban/NewLeadDialog";
@@ -35,9 +36,14 @@ export function PipelinePageClient({
   pipelineId,
   initialName,
   role,
+  funis = [],
+  podeGerenciar = false,
 }: {
   pipelineId: string;
   initialName: string;
+  /** Os funis vivos da organização (o título vira lista suspensa). */
+  funis?: Array<{ id: string; name: string }>;
+  podeGerenciar?: boolean;
   role: Role;
 }) {
   const t = useT();
@@ -114,9 +120,12 @@ export function PipelinePageClient({
           fora da viewport em telas estreitas. De `sm:` pra cima volta a ser
           uma linha só, como sempre foi. */}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight">
-          {data?.pipeline.name ?? initialName}
-        </h1>
+        <SeletorDeFunil
+          atualId={pipelineId}
+          atualNome={data?.pipeline.name ?? initialName}
+          funis={funis}
+          podeGerenciar={podeGerenciar}
+        />
         <Button onClick={() => setNewOpen(true)} disabled={!data} className="shrink-0">
           <Plus size={16} className="mr-2" /> {t("Novo Lead")}
         </Button>

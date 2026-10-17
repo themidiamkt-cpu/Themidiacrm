@@ -57,6 +57,16 @@ interface Rascunho {
 
 const VAZIO: Rascunho = { id: null, nome: "", meses: "6", mensagem: MODELO_DE_MENSAGEM, etapa: "", ativo: true };
 
+/**
+ * Procedimento novo já vem apontando para a etapa "Retorno", se o funil tem uma:
+ * quem recebeu o convite de voltar fica separado dos leads novos e nenhum
+ * follow-up dispara por ali. Só uma sugestão, a pessoa troca no seletor.
+ */
+function etapaSugerida(etapas: EtapaParaEscolher[]): string {
+  const semAcento = (n: string) => n.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  return etapas.find((e) => semAcento(e.nome) === "retorno")?.id ?? "";
+}
+
 export function PainelDeProcedimentos({ etapas }: { etapas: EtapaParaEscolher[] }) {
   const t = useT();
   const { data: lista, isLoading, isError, error } = useProcedimentos();
@@ -123,7 +133,7 @@ export function PainelDeProcedimentos({ etapas }: { etapas: EtapaParaEscolher[] 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium">{t("Procedimentos cadastrados")}</h2>
         {!form && (
-          <Button onClick={() => setForm({ ...VAZIO })} data-testid="novo-procedimento">
+          <Button onClick={() => setForm({ ...VAZIO, etapa: etapaSugerida(etapas) })} data-testid="novo-procedimento">
             {t("Novo procedimento")}
           </Button>
         )}

@@ -8381,6 +8381,8 @@ export const DICIONARIO: Traducoes = {
   "conversa sem mensagens": { es: "conversación sin mensajes" },
   "Enviar mensagem pronta": { es: "Enviar mensaje listo" },
   "Agendar reunião": { es: "Agendar reunión" },
+  "Trocar de funil": { es: "Cambiar de embudo" },
+  "Gerenciar funis": { es: "Gestionar embudos" },
   "Venceu, aguardando o envio": { es: "Venció, esperando el envío" },
   "Quem venceu e ainda não recebeu está esperando o horário de envio do WhatsApp (7h–22h) ou o canal está em modo de teste. Em Conexões › Configurar acesso da IA você libera o canal ou inclui o número na lista de teste.": { es: "Quien venció y aún no recibió está esperando el horario de envío de WhatsApp (7h–22h) o el canal está en modo de prueba. En Conexiones › Configurar acceso de la IA puede liberar el canal o incluir el número en la lista de prueba." },
   "Ver pessoas": { es: "Ver personas" },

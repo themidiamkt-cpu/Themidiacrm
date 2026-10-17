@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
+import { ROLE_RANK } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
 import { PipelinePageClient } from "./_client";
 
@@ -26,5 +27,22 @@ export default async function PipelinePage({
     .eq("id", id)
     .maybeSingle();
   if (!pipeline) notFound();
-  return <PipelinePageClient pipelineId={id} initialName={pipeline.name} role={activeOrg.role} />;
+  // Os outros funis da organização, para o título virar lista suspensa. Só os
+  // vivos (arquivado não se escolhe aqui) e SÓ desta organização: a RLS libera as
+  // de todas as organizações do usuário.
+  const { data: funis } = await supabase
+    .from("crm_pipelines")
+    .select("id, name")
+    .eq("organization_id", activeOrg.orgId)
+    .eq("is_archived", false)
+    .order("position");
+  return (
+    <PipelinePageClient
+      pipelineId={id}
+      initialName={pipeline.name}
+      role={activeOrg.role}
+      funis={(funis ?? []) as Array<{ id: string; name: string }>}
+      podeGerenciar={ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager}
+    />
+  );
 }

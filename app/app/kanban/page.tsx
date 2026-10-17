@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { Kanban } from "@/lib/ui/icons";
@@ -6,6 +7,7 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { COOKIE_DO_FUNIL_ATUAL, funilDeEntrada } from "@/lib/kanban/funil-atual";
 import { FunisClient, type FunilDaLista } from "./_client";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +32,11 @@ export const metadata: Metadata = { title: "Funis" };
  * atalho de platform admin, que as rotas não concedem por padrão): mostrar um
  * botão que o servidor recusaria seria prometer o que não se cumpre.
  */
-export default async function KanbanPickerPage() {
+export default async function KanbanPickerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ gerenciar?: string; lead?: string }>;
+}) {
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
@@ -53,6 +59,26 @@ export default async function KanbanPickerPage() {
 
   const todos = (data ?? []) as Array<FunilDaLista & { is_archived: boolean }>;
   const funis = todos.filter((f) => !f.is_archived);
+  // "Funis" no menu abre o QUADRO direto (o último funil aberto, o padrão ou o
+  // primeiro). Esta lista — onde se renomeia, reordena, arquiva e importa — é
+  // `?gerenciar=1`, pelo link do seletor no título do quadro. Sem nenhum funil
+  // vivo a lista continua sendo a tela: é por ela que se cria o primeiro.
+  const { gerenciar, lead } = await searchParams;
+  if (gerenciar !== "1") {
+    // Link para um negócio (`?lead=<id>`, ex.: Configurações › Conversões): vai ao
+    // quadro do funil DELE e abre o dossiê, em vez de cair no funil de entrada.
+    if (lead && /^[0-9a-f-]{36}$/i.test(lead)) {
+      const { data: negocio } = await supabase
+        .from("crm_leads")
+        .select("pipeline_id")
+        .eq("organization_id", activeOrg.orgId)
+        .eq("id", lead)
+        .maybeSingle();
+      if (negocio?.pipeline_id) redirect(`/app/pipelines/${negocio.pipeline_id}?lead=${lead}`);
+    }
+    const entrada = funilDeEntrada(funis, (await cookies()).get(COOKIE_DO_FUNIL_ATUAL)?.value);
+    if (entrada) redirect(`/app/pipelines/${entrada.id}`);
+  }
   const podeGerenciar = ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager;
   // O arquivo só vai para quem pode mexer nele: tirar do arquivo e excluir são
   // `requireRole("manager")` nas rotas, e mostrar a gaveta a quem receberia 403
