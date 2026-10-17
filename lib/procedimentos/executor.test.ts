@@ -3,10 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const enviar = vi.hoisted(() => vi.fn());
 const mover = vi.hoisted(() => vi.fn());
 const janela = vi.hoisted(() => vi.fn());
+const gateDeTeste = vi.hoisted(() => vi.fn());
 
 vi.mock("@/app/api/v1/messages/_handler", () => ({ sendMessageHandler: enviar }));
 vi.mock("@/app/api/v1/leads/_handler", () => ({ moveLeadHandler: mover }));
 vi.mock("@/lib/automation/janela-do-canal", () => ({ adiarAteAJanelaAbrir: janela }));
+vi.mock("@/lib/ai/elegibilidade/consulta-pre-go-live", () => ({
+  decidirPreGoLiveDoCanalViaSupabase: gateDeTeste,
+}));
 vi.mock("@/lib/automation/start-conversation", () => ({
   ensureConversation: vi.fn(async () => "conversa-1"),
 }));
@@ -119,6 +123,8 @@ beforeEach(() => {
   mover.mockResolvedValue({});
   janela.mockReset();
   janela.mockResolvedValue(null); // dentro da janela
+  gateDeTeste.mockReset();
+  gateDeTeste.mockResolvedValue({ ativo: false, permite: true, motivo: "fora_do_pre_go_live" });
 });
 
 describe("tickProcedimentos", () => {
@@ -159,6 +165,31 @@ describe("tickProcedimentos", () => {
     expect(r.pulados.fora_da_janela).toBe(1);
     expect(enviar).not.toHaveBeenCalled();
     expect(atualizacoes).toHaveLength(0);
+  });
+
+  it("canal em modo de teste e número fora da lista: não reserva, não envia, não cria mensagem", async () => {
+    gateDeTeste.mockResolvedValue({ ativo: true, permite: false, motivo: "fora_da_lista_de_teste" });
+    const r = await tickProcedimentos(bancoDeMentira(mundo()) as never, { agora: AGORA });
+    expect(r.pulados.canal_em_teste).toBe(1);
+    expect(r.enviados).toBe(0);
+    expect(enviar).not.toHaveBeenCalled();
+    expect(atualizacoes).toHaveLength(0); // continua pendente, sem tocar no registro
+  });
+
+  it("número da lista de teste passa", async () => {
+    gateDeTeste.mockResolvedValue({ ativo: true, permite: true, motivo: "numero_de_teste" });
+    const r = await tickProcedimentos(bancoDeMentira(mundo()) as never, { agora: AGORA });
+    expect(r.enviados).toBe(1);
+  });
+
+  it("mensagem devolvida como failed NÃO é enviado: devolve a reserva", async () => {
+    enviar.mockResolvedValue({ status: "failed", error_code: "pre_go_live" });
+    const r = await tickProcedimentos(bancoDeMentira(mundo()) as never, { agora: AGORA });
+    expect(r.enviados).toBe(0);
+    expect(r.erros).toBe(1);
+    expect(mover).not.toHaveBeenCalled();
+    expect(atualizacoes.some((a) => a.dados.lembrete_resultado === "enviado")).toBe(false);
+    expect(atualizacoes[atualizacoes.length - 1]!.dados).toEqual({ lembrete_enviado_em: null });
   });
 
   it("procedimento pausado: espera, não envia", async () => {

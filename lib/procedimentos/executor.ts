@@ -31,6 +31,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { sendMessageHandler } from "@/app/api/v1/messages/_handler";
 import { moveLeadHandler } from "@/app/api/v1/leads/_handler";
+import { decidirPreGoLiveDoCanalViaSupabase } from "@/lib/ai/elegibilidade/consulta-pre-go-live";
 import { adiarAteAJanelaAbrir } from "@/lib/automation/janela-do-canal";
 import { ensureConversation } from "@/lib/automation/start-conversation";
 import { espacarEnvio } from "@/lib/automation/throttle";
@@ -209,6 +210,22 @@ export async function tickProcedimentos(
       continue;
     }
 
+    // MODO DE TESTE DO CANAL (`pre_go_live`): o envio automático só vale para os
+    // números da lista de teste. Conferido ANTES de reservar: sem isto, cada rodada
+    // criaria uma mensagem `failed` ("bloqueado pelo modo de teste") na conversa do
+    // paciente e o retorno seria dado como enviado. O registro fica pendente e
+    // sai sozinho quando o canal é liberado (ou o número entra na lista).
+    // Quem libera é o Roberto, em Conexões › Configurar acesso da IA — nunca este código.
+    const gate = await decidirPreGoLiveDoCanalViaSupabase(admin, {
+      organizationId: org,
+      channelSessionId: canal.id,
+      contactPhoneNumber: contato.phone_number,
+    });
+    if (!gate.permite) {
+      pular("canal_em_teste");
+      continue;
+    }
+
     // RESERVA: só quem muda `lembrete_enviado_em` de null manda a mensagem.
     const tentativa = linha.lembrete_tentativas + 1;
     const { data: reservada } = await admin
@@ -233,7 +250,7 @@ export async function tickProcedimentos(
     try {
       await espacarEnvio(canal.id);
       const conversaId = await ensureConversation(admin, org, contato.id, canal.id);
-      await sendMessageHandler(
+      const mensagem = await sendMessageHandler(
         admin,
         {
           organization_id: org,
@@ -244,6 +261,12 @@ export async function tickProcedimentos(
           typeof sendMessageHandler
         >[2],
       );
+      // O handler DEVOLVE a mensagem mesmo quando o envio é recusado (ela nasce
+      // `failed` com `error_code`): isso não é "enviado". Tratar como falha devolve
+      // a reserva e conta a tentativa, em vez de dar o retorno por feito.
+      if (mensagem?.status === "failed") {
+        throw new Error(`mensagem_recusada:${mensagem.error_code ?? "sem_codigo"}`);
+      }
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : String(err);
       logger.error("[procedimentos] envio falhou", { linhaId: linha.id, tentativa, error: mensagem });

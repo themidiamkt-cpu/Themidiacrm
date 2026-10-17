@@ -15,6 +15,7 @@ import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { COLUNAS_DO_CATALOGO, semTipos, tabelaAusente } from "@/lib/procedimentos/db";
+import { hojeNoFuso } from "@/lib/procedimentos/regras";
 import { resumirRetornos, type LinhaDoRetorno } from "@/lib/procedimentos/retornos";
 import { createClient } from "@/lib/supabase/server";
 
@@ -80,7 +81,7 @@ export async function GET(_req: NextRequest): Promise<Response> {
       }>,
       pendentes: (pendentes.data ?? []) as unknown as LinhaDoRetorno[],
       recentes: (recentes.data ?? []) as unknown as LinhaDoRetorno[],
-    }),
+    }, hojeNoFuso(org.timezone)),
     { requestId },
   );
 }

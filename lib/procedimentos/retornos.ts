@@ -29,7 +29,7 @@ export interface ItemDaFila {
   procedimento: string;
   realizado_em: string | null;
   vence_em: string | null;
-  /** aguardando | enviado | expirado | sem_numero | contato_bloqueado | sem_procedimento | falhou */
+  /** aguardando | aguardando_envio (já venceu e não saiu: janela de horário, canal em teste…) | enviado | expirado | sem_numero | contato_bloqueado | sem_procedimento | falhou */
   estado: string;
   quando: string | null;
 }
@@ -70,11 +70,15 @@ function paraItem(linha: LinhaDoRetorno, estado: string): ItemDaFila {
   };
 }
 
-export function resumirRetornos(entrada: {
-  catalogo: Array<{ id: string; nome: string; meses_validade: number; ativo: boolean }>;
-  pendentes: LinhaDoRetorno[];
-  recentes: LinhaDoRetorno[];
-}): ResumoDosRetornos {
+export function resumirRetornos(
+  entrada: {
+    catalogo: Array<{ id: string; nome: string; meses_validade: number; ativo: boolean }>;
+    pendentes: LinhaDoRetorno[];
+    recentes: LinhaDoRetorno[];
+  },
+  /** Hoje (`YYYY-MM-DD`, no fuso da organização): quem já venceu e ainda não saiu vira `aguardando_envio`. */
+  hoje?: string,
+): ResumoDosRetornos {
   const procedimentos = entrada.catalogo.map<CartaoDoProcedimento>((p) => {
     const aguardando = entrada.pendentes.filter((l) => l.procedimento_id === p.id);
     const vencimentos = aguardando.map((l) => l.vence_em).filter((v): v is string => !!v).sort();
@@ -91,7 +95,9 @@ export function resumirRetornos(entrada: {
     };
   });
   const fila = [
-    ...entrada.pendentes.map((l) => paraItem(l, "aguardando")),
+    ...entrada.pendentes.map((l) =>
+      paraItem(l, hoje && l.vence_em && l.vence_em <= hoje ? "aguardando_envio" : "aguardando"),
+    ),
     ...entrada.recentes.map((l) => paraItem(l, l.lembrete_resultado ?? "aguardando")),
   ];
   return { procedimentos, fila };

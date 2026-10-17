@@ -5,7 +5,13 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -23,57 +29,72 @@ function dia(iso: string | null): string {
   return iso ? new Date(`${iso}T12:00:00`).toLocaleDateString() : "—";
 }
 
-const ROTULO_DO_ESTADO: Record<string, { texto: string; tom: "neutral" | "success" | "warning" }> = {
-  aguardando: { texto: "Aguardando o vencimento", tom: "neutral" },
-  enviado: { texto: "Enviado", tom: "success" },
-  expirado: { texto: "Vencido, não enviado", tom: "warning" },
-  sem_numero: { texto: "Sem telefone", tom: "warning" },
-  contato_bloqueado: { texto: "Contato bloqueado", tom: "warning" },
-  sem_procedimento: { texto: "Procedimento removido", tom: "warning" },
-  falhou: { texto: "Falhou", tom: "warning" },
-};
+const ROTULO_DO_ESTADO: Record<string, { texto: string; tom: "neutral" | "success" | "warning" }> =
+  {
+    aguardando: { texto: "Aguardando o vencimento", tom: "neutral" },
+    aguardando_envio: { texto: "Venceu, aguardando o envio", tom: "warning" },
+    enviado: { texto: "Enviado", tom: "success" },
+    expirado: { texto: "Vencido, não enviado", tom: "warning" },
+    sem_numero: { texto: "Sem telefone", tom: "warning" },
+    contato_bloqueado: { texto: "Contato bloqueado", tom: "warning" },
+    sem_procedimento: { texto: "Procedimento removido", tom: "warning" },
+    falhou: { texto: "Falhou", tom: "warning" },
+  };
 
 const ROTULO_DO_ESTADO_FILA = ROTULO_DO_ESTADO;
 
 /** A tabela de pessoas — usada na janela "Pessoas no fluxo" do cartão e na aba Fila. */
 function TabelaDePessoas({ itens }: { itens: ItemDaFila[] }) {
   const t = useT();
+  const atrasados = itens.some((i) => i.estado === "aguardando_envio");
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>{t("Contato")}</TableHead>
-          <TableHead>{t("Procedimento")}</TableHead>
-          <TableHead>{t("Feito em")}</TableHead>
-          <TableHead>{t("Retorno em")}</TableHead>
-          <TableHead>{t("Situação")}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {itens.map((item) => {
-          const estado = ROTULO_DO_ESTADO_FILA[item.estado] ?? ROTULO_DO_ESTADO_FILA.aguardando!;
-          return (
-            <TableRow key={item.id}>
-              <TableCell>
-                {item.contact_id ? (
-                  <Link className="underline" href={`/app/contacts/${item.contact_id}`}>
-                    {item.paciente}
-                  </Link>
-                ) : (
-                  item.paciente
-                )}
-              </TableCell>
-              <TableCell>{item.procedimento}</TableCell>
-              <TableCell>{dia(item.realizado_em)}</TableCell>
-              <TableCell>{dia(item.vence_em)}</TableCell>
-              <TableCell>
-                <Badge variant={estado.tom}>{t(estado.texto)}</Badge>
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+    <>
+      {atrasados && (
+        <p
+          className="border-b border-border bg-muted/40 px-4 py-2 text-xs text-text-muted"
+          data-testid="aviso-de-envio-parado"
+        >
+          {t(
+            "Quem venceu e ainda não recebeu está esperando o horário de envio do WhatsApp (7h–22h) ou o canal está em modo de teste. Em Conexões › Configurar acesso da IA você libera o canal ou inclui o número na lista de teste.",
+          )}
+        </p>
+      )}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t("Contato")}</TableHead>
+            <TableHead>{t("Procedimento")}</TableHead>
+            <TableHead>{t("Feito em")}</TableHead>
+            <TableHead>{t("Retorno em")}</TableHead>
+            <TableHead>{t("Situação")}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {itens.map((item) => {
+            const estado = ROTULO_DO_ESTADO_FILA[item.estado] ?? ROTULO_DO_ESTADO_FILA.aguardando!;
+            return (
+              <TableRow key={item.id}>
+                <TableCell>
+                  {item.contact_id ? (
+                    <Link className="underline" href={`/app/contacts/${item.contact_id}`}>
+                      {item.paciente}
+                    </Link>
+                  ) : (
+                    item.paciente
+                  )}
+                </TableCell>
+                <TableCell>{item.procedimento}</TableCell>
+                <TableCell>{dia(item.realizado_em)}</TableCell>
+                <TableCell>{dia(item.vence_em)}</TableCell>
+                <TableCell>
+                  <Badge variant={estado.tom}>{t(estado.texto)}</Badge>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </>
   );
 }
 
@@ -101,11 +122,15 @@ function PessoasDoRetorno({
             {t("Pessoas no fluxo")} · {nome}
           </DialogTitle>
           <DialogDescription>
-            {t("Quem espera o retorno deste procedimento e o que aconteceu com os últimos envios (30 dias).")}
+            {t(
+              "Quem espera o retorno deste procedimento e o que aconteceu com os últimos envios (30 dias).",
+            )}
           </DialogDescription>
         </DialogHeader>
         {itens.length === 0 ? (
-          <p className="py-6 text-center text-sm text-text-muted">{t("Ninguém neste retorno por enquanto.")}</p>
+          <p className="py-6 text-center text-sm text-text-muted">
+            {t("Ninguém neste retorno por enquanto.")}
+          </p>
         ) : (
           <div className="max-h-[60vh] overflow-auto">
             <TabelaDePessoas itens={itens} />
@@ -142,7 +167,9 @@ export function RetornosNosFluxos({ canWrite }: { canWrite: boolean }) {
                 <h3 className="text-sm font-medium">
                   {t("Retorno")} · {p.nome}
                 </h3>
-                <Badge variant={p.ativo ? "success" : "neutral"}>{p.ativo ? t("Ativo") : t("Pausado")}</Badge>
+                <Badge variant={p.ativo ? "success" : "neutral"}>
+                  {p.ativo ? t("Ativo") : t("Pausado")}
+                </Badge>
               </div>
               <dl className="grid grid-cols-3 gap-2 text-xs">
                 <div>
@@ -164,7 +191,12 @@ export function RetornosNosFluxos({ canWrite }: { canWrite: boolean }) {
                 {t("Próximo retorno")}: {dia(p.proximo_vencimento)}
               </p>
               <div className="mt-auto flex items-center justify-end gap-3 border-t border-border pt-3">
-                <Button size="sm" variant="outline" onClick={() => setAberto(p.id)} data-testid={`ver-pessoas-${p.id}`}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAberto(p.id)}
+                  data-testid={`ver-pessoas-${p.id}`}
+                >
                   {t("Ver pessoas")}
                 </Button>
                 {canWrite && (

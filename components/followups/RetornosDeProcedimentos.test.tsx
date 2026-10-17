@@ -15,6 +15,7 @@ const RESUMO = {
   ],
   fila: [
     { id: "a", lead_id: "l1", contact_id: "c1", procedimento_id: "p1", paciente: "Maria Silva", procedimento: "Botox", realizado_em: "2026-05-05", vence_em: "2026-11-05", estado: "aguardando", quando: null },
+    { id: "c", lead_id: "l3", contact_id: "c3", procedimento_id: "p1", paciente: "Lia", procedimento: "Botox", realizado_em: "2026-04-01", vence_em: "2026-10-16", estado: "aguardando_envio", quando: null },
     { id: "b", lead_id: "l2", contact_id: "c2", procedimento_id: "p1", paciente: "Ana", procedimento: "Botox", realizado_em: "2026-04-01", vence_em: "2026-10-01", estado: "enviado", quando: "2026-10-01T15:00:00Z" },
   ],
 };
@@ -46,6 +47,12 @@ describe("Retornos de procedimentos na tela Follow-ups", () => {
     expect(within(janela).getByText("Ana")).toBeInTheDocument();
     expect(within(janela).getByText("Aguardando o vencimento")).toBeInTheDocument();
     expect(within(janela).getByText("Enviado")).toBeInTheDocument();
+  });
+
+  it("quem já venceu e não saiu aparece como 'aguardando o envio' com a explicação (janela de horário / canal em teste)", () => {
+    render(<RetornosNaFila />);
+    expect(screen.getByText("Venceu, aguardando o envio")).toBeInTheDocument();
+    expect(screen.getByTestId("aviso-de-envio-parado")).toHaveTextContent(/modo de teste/);
   });
 
   it("Fluxos: procedimento sem ninguém mostra a mensagem vazia", () => {

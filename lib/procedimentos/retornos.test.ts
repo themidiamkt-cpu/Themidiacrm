@@ -82,4 +82,24 @@ describe("resumirRetornos", () => {
     });
     expect(r.fila[0]!.paciente).toBe("Ana");
   });
+
+  it("quem já venceu e ainda não saiu vira 'aguardando_envio' (e quem vence depois segue 'aguardando')", () => {
+    const r = resumirRetornos(
+      {
+        catalogo,
+        pendentes: [
+          linha({ id: "a", vence_em: "2026-10-16" }),
+          linha({ id: "b", vence_em: "2026-10-17" }),
+          linha({ id: "c", vence_em: "2026-10-18" }),
+        ],
+        recentes: [],
+      },
+      "2026-10-17",
+    );
+    expect(r.fila.map((i) => [i.id, i.estado])).toEqual([
+      ["a", "aguardando_envio"],
+      ["b", "aguardando_envio"],
+      ["c", "aguardando"],
+    ]);
+  });
 });
