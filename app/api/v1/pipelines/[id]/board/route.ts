@@ -302,6 +302,38 @@ async function withConversas(
     });
   }
 
+  // Mensagem pronta por conversa: UMA consulta em lotes para todas as conversas
+  // que aparecem no quadro. Falha aqui não derruba o quadro: sem rascunho o
+  // cartão só não mostra o botão "Enviar".
+  const idsDasConversas = [...new Set([...porContato.values()].map((c) => c.id))];
+  if (idsDasConversas.length > 0) {
+    const { data: rascunhos } = await buscaEmLotes(idsDasConversas, (lote) =>
+      supabase
+        .from("conversation_drafts")
+        .select("id, conversation_id, body, created_at")
+        .eq("organization_id", organizationId)
+        .in("conversation_id", lote)
+        .is("consumed_at", null)
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false }),
+    );
+    const prontaPorConversa = new Map<string, { id: string; texto: string }>();
+    for (const r of (rascunhos ?? []) as Array<{
+      id: string;
+      conversation_id: string;
+      body: string;
+    }>) {
+      // Mais recente vence (consulta ordenada por created_at desc).
+      if (!prontaPorConversa.has(r.conversation_id)) {
+        prontaPorConversa.set(r.conversation_id, { id: r.id, texto: r.body });
+      }
+    }
+    for (const conversa of porContato.values()) {
+      const pronta = prontaPorConversa.get(conversa.id);
+      if (pronta) conversa.rascunho = pronta;
+    }
+  }
+
   return {
     leads: leads.map((lead) => {
       if (!lead.contact_id) return lead;

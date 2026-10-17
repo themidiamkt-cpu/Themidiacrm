@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { MouseEvent } from "react";
 
 import { useT } from "@/hooks/i18n/useT";
+import { EnviarMensagemPronta } from "./EnviarMensagemPronta";
 import { abrirConversaAoLado } from "@/lib/ui/abrir-conversa-ao-lado";
 import { ChatCircle } from "@/lib/ui/icons";
 import type { Lead } from "@/lib/types/leads";
@@ -39,39 +40,44 @@ export function ConversaSlot({ conversa }: { conversa: Lead["conversa"] }) {
   const temNaoLidas = conversa.unread > 0;
 
   return (
-    <Link
-      href={`/app/inbox?id=${conversa.id}`}
-      // O card inteiro é arrastável e clicável (abre o dossiê). Sem parar a
-      // propagação, o clique no atalho também abriria o dossiê por baixo — dois
-      // destinos para um gesto.
-      // A conversa abre numa janela estreita ao lado, a mesma da Prospecção,
-      // com o rascunho pendente já no campo: quem trabalha a coluna "Mensagem
-      // pronta" envia uma a uma sem sair do quadro. Ctrl/Cmd mantêm o link comum.
-      onClick={(e: MouseEvent<HTMLAnchorElement>) => {
-        e.stopPropagation();
-        abrirConversaAoLado(e);
-      }}
-      onPointerDown={(e: MouseEvent) => e.stopPropagation()}
-      className={cn(
-        "group/conversa mt-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[11px]",
-        "text-text-muted transition-colors hover:bg-muted hover:text-foreground",
-      )}
-      title={t("Abrir esta conversa no Inbox")}
-    >
-      <ChatCircle size={12} weight="regular" className="shrink-0" aria-hidden />
-      <span className="truncate">
-        {preview || <span className="italic">{t("conversa sem mensagens")}</span>}
-      </span>
-      {temNaoLidas && (
-        // O número, não um ponto: "3 sem ler" e "12 sem ler" pedem urgências
-        // diferentes, e um ponto colapsa as duas.
-        <span
-          className="ml-auto shrink-0 rounded-full bg-primary px-1.5 text-[10px] font-medium text-primary-foreground tabular-nums"
-          aria-label={`${conversa.unread} ${t("sem ler")}`}
-        >
-          {conversa.unread}
+    <>
+      <Link
+        href={`/app/inbox?id=${conversa.id}`}
+        // O card inteiro é arrastável e clicável (abre o dossiê). Sem parar a
+        // propagação, o clique no atalho também abriria o dossiê por baixo — dois
+        // destinos para um gesto.
+        // A conversa abre numa janela estreita ao lado, a mesma da Prospecção,
+        // com o rascunho pendente já no campo: quem trabalha a coluna "Mensagem
+        // pronta" envia uma a uma sem sair do quadro. Ctrl/Cmd mantêm o link comum.
+        onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+          e.stopPropagation();
+          abrirConversaAoLado(e);
+        }}
+        onPointerDown={(e: MouseEvent) => e.stopPropagation()}
+        className={cn(
+          "group/conversa mt-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[11px]",
+          "text-text-muted transition-colors hover:bg-muted hover:text-foreground",
+        )}
+        title={t("Abrir esta conversa no Inbox")}
+      >
+        <ChatCircle size={12} weight="regular" className="shrink-0" aria-hidden />
+        <span className="truncate">
+          {preview || <span className="italic">{t("conversa sem mensagens")}</span>}
         </span>
+        {temNaoLidas && (
+          // O número, não um ponto: "3 sem ler" e "12 sem ler" pedem urgências
+          // diferentes, e um ponto colapsa as duas.
+          <span
+            className="ml-auto shrink-0 rounded-full bg-primary px-1.5 text-[10px] font-medium text-primary-foreground tabular-nums"
+            aria-label={`${conversa.unread} ${t("sem ler")}`}
+          >
+            {conversa.unread}
+          </span>
+        )}
+      </Link>
+      {conversa.rascunho && (
+        <EnviarMensagemPronta conversationId={conversa.id} rascunho={conversa.rascunho} />
       )}
-    </Link>
+    </>
   );
 }

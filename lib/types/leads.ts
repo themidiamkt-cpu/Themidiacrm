@@ -79,6 +79,12 @@ export interface Lead {
     preview: string | null;
     last_message_at: string | null;
     unread: number;
+    /**
+     * Mensagem pronta (rascunho pendente, não usado e não vencido) desta conversa.
+     * Ausente = não há. É o que liga o botão "Enviar" do cartão: o texto vem do
+     * servidor, nunca do cliente, e a pessoa confirma antes de sair.
+     */
+    rascunho?: { id: string; texto: string } | null;
   } | null;
   score?: {
     probability: number;
