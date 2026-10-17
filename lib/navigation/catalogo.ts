@@ -894,6 +894,19 @@ export const NAV_CATALOG = [
     minRole: "manager",
   },
   {
+    // Procedimentos com retorno automático (clínica de estética): o catálogo com
+    // validade em meses, a mensagem de retorno e a etapa para onde o lead vai
+    // depois. `manager`: o texto cadastrado aqui sai para pacientes sozinho.
+    href: "/app/settings/procedimentos",
+    label: "Procedimentos",
+    description:
+      "O que a clínica faz, de quantos em quantos meses o paciente volta e a mensagem que o CRM manda sozinho no vencimento.",
+    icon: "ListChecks",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "manager",
+  },
+  {
     // A área única dos recursos opcionais (pedido do mantenedor, doc 73/80):
     // tudo o que a empresa pode ligar, com o estado e o caminho até a tela onde
     // se liga. Só leitura — quem liga continua sendo a tela do assunto.

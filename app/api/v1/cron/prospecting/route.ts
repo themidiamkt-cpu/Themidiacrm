@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { tickProspecting } from "@/lib/prospecting/worker";
 import { sincronizarFunilDaAbordagem } from "@/lib/prospecting/manual-sync";
 import { tickOrganizadorDeFunil } from "@/lib/funil/organizador";
+import { tickProcedimentos } from "@/lib/procedimentos/executor";
 import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,23 @@ async function organizarFunis(
   }
 }
 
+/**
+ * O retorno automático de procedimentos (botox a cada 6 meses…) pega carona
+ * AQUI pelo mesmo motivo do organizador: é o cron que roda a cada minuto e está
+ * na lista do agendador. Nunca rejeita — uma falha daqui não pode parar a
+ * prospecção, nem o contrário. Sem a tabela (migration não aplicada) responde
+ * `ausente`.
+ */
+async function retornarProcedimentos(admin: ReturnType<typeof createAdminClient>, requestId: string) {
+  try {
+    return await tickProcedimentos(admin);
+  } catch (err) {
+    const erro = err instanceof Error ? err.message : String(err);
+    logger.error("[prospecting.cron] retorno de procedimentos lançou", { error: erro, requestId });
+    return { erro };
+  }
+}
+
 async function handle(req: NextRequest) {
   const requestId = randomUUID();
   if (!autorizaCron(req))
@@ -42,6 +60,7 @@ async function handle(req: NextRequest) {
     const pool = getRequestPool();
     const admin = createAdminClient();
     organizando = organizarFunis(pool, admin, requestId);
+    const retornando = retornarProcedimentos(admin, requestId);
     const tick = await tickProspecting(pool, admin);
     // O funil acompanha o que a conversa mostra (envio e resposta). Falha aqui
     // não derruba a fila: a rodada seguinte tenta de novo.
@@ -56,12 +75,18 @@ async function handle(req: NextRequest) {
       });
     }
     return ok(
-      { ...(tick as Record<string, unknown>), funil, organizador: await organizando },
+      {
+        ...(tick as Record<string, unknown>),
+        funil,
+        organizador: await organizando,
+        procedimentos: await retornando,
+      },
       { requestId },
     );
   } catch (err) {
     // A rodada do organizador termina antes da resposta, mesmo com a prospecção quebrada.
     if (organizando) await organizando;
+    await retornarProcedimentos(createAdminClient(), requestId);
     // O `catch` era SEM PARÂMETRO: o objeto do erro não ficava de fora do log,
     // ele era DESCARTADO — não existia em variável nenhuma. Num cron, que roda
     // sozinho e sem ninguém olhando, isso significava que a prospecção da

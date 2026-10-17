@@ -14,6 +14,7 @@ import { ConversaNoDossie } from "./ConversaNoDossie";
 import { LeadFieldsForm } from "./LeadFieldsForm";
 import { ScoreSlot } from "./ScoreSlot";
 import { LeadTimeline } from "./LeadTimeline";
+import { ProcedimentosDoNegocio } from "./ProcedimentosDoNegocio";
 import { PropostasDoNegocio } from "./PropostasDoNegocio";
 import { OwnerBadge } from "./OwnerBadge";
 import { resolveLeadOwner } from "@/lib/kanban/owner";
@@ -158,6 +159,9 @@ export function LeadDossier({
             isError={timeline.isError}
           />
         </section>
+
+        {/* Procedimentos feitos/agendados: é daqui que nasce o retorno automático. */}
+        <ProcedimentosDoNegocio leadId={lead.id} />
 
         {/* ③ campos, por último */}
         <div ref={campos} className="border-t border-border pt-3">

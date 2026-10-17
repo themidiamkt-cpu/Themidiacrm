@@ -342,6 +342,13 @@ export const AUDIT_ACTIONS = [
   "template.created",
   "template.updated",
   "template.deleted",
+  // Procedimentos com retorno automático (The Mídia): o catálogo e os registros dos leads.
+  "procedimento.created",
+  "procedimento.updated",
+  "procedimento.deleted",
+  "lead_procedimento.registered",
+  "lead_procedimento.updated",
+  "lead_procedimento.deleted",
   "auth.signup_requested",
   "auth.signup_failed",
   "auth.signup_confirmed",
