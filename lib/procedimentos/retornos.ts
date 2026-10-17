@@ -9,6 +9,7 @@ type Embed<T> = T | T[] | null;
 export interface LinhaDoRetorno {
   id: string;
   lead_id: string;
+  contact_id: string | null;
   procedimento_id: string | null;
   nome: string;
   realizado_em: string | null;
@@ -22,6 +23,8 @@ export interface LinhaDoRetorno {
 export interface ItemDaFila {
   id: string;
   lead_id: string;
+  contact_id: string | null;
+  procedimento_id: string | null;
   paciente: string;
   procedimento: string;
   realizado_em: string | null;
@@ -56,6 +59,8 @@ function paraItem(linha: LinhaDoRetorno, estado: string): ItemDaFila {
   return {
     id: linha.id,
     lead_id: linha.lead_id,
+    contact_id: linha.contact_id,
+    procedimento_id: linha.procedimento_id,
     paciente: nomeDoContato(contato) ?? lead?.title ?? contato?.phone_number ?? "—",
     procedimento: linha.nome,
     realizado_em: linha.realizado_em,

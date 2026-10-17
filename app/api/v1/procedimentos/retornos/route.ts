@@ -21,7 +21,7 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 const COLUNAS_DA_FILA =
-  "id, lead_id, procedimento_id, nome, status, realizado_em, vence_em, lembrete_enviado_em, lembrete_resultado, contacts(name, display_name, phone_number), crm_leads(title)";
+  "id, lead_id, contact_id, procedimento_id, nome, status, realizado_em, vence_em, lembrete_enviado_em, lembrete_resultado, contacts(name, display_name, phone_number), crm_leads(title)";
 
 export async function GET(_req: NextRequest): Promise<Response> {
   const requestId = randomUUID();

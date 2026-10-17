@@ -1,8 +1,11 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -13,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { useT } from "@/hooks/i18n/useT";
 import { useRetornosDeProcedimentos } from "@/hooks/procedimentos/useRetornos";
+import type { ItemDaFila } from "@/lib/procedimentos/retornos";
 
 /** `YYYY-MM-DD` mostrado como dia civil, sem passar por fuso. */
 function dia(iso: string | null): string {
@@ -29,6 +33,89 @@ const ROTULO_DO_ESTADO: Record<string, { texto: string; tom: "neutral" | "succes
   falhou: { texto: "Falhou", tom: "warning" },
 };
 
+const ROTULO_DO_ESTADO_FILA = ROTULO_DO_ESTADO;
+
+/** A tabela de pessoas — usada na janela "Pessoas no fluxo" do cartão e na aba Fila. */
+function TabelaDePessoas({ itens }: { itens: ItemDaFila[] }) {
+  const t = useT();
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>{t("Contato")}</TableHead>
+          <TableHead>{t("Procedimento")}</TableHead>
+          <TableHead>{t("Feito em")}</TableHead>
+          <TableHead>{t("Retorno em")}</TableHead>
+          <TableHead>{t("Situação")}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {itens.map((item) => {
+          const estado = ROTULO_DO_ESTADO_FILA[item.estado] ?? ROTULO_DO_ESTADO_FILA.aguardando!;
+          return (
+            <TableRow key={item.id}>
+              <TableCell>
+                {item.contact_id ? (
+                  <Link className="underline" href={`/app/contacts/${item.contact_id}`}>
+                    {item.paciente}
+                  </Link>
+                ) : (
+                  item.paciente
+                )}
+              </TableCell>
+              <TableCell>{item.procedimento}</TableCell>
+              <TableCell>{dia(item.realizado_em)}</TableCell>
+              <TableCell>{dia(item.vence_em)}</TableCell>
+              <TableCell>
+                <Badge variant={estado.tom}>{t(estado.texto)}</Badge>
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}
+
+/**
+ * "Pessoas no fluxo" de um procedimento: quem está esperando o retorno (primeiro,
+ * por vencimento) e o que aconteceu com os últimos envios. Abre pelo cartão.
+ */
+function PessoasDoRetorno({
+  nome,
+  itens,
+  aberto,
+  onFechar,
+}: {
+  nome: string;
+  itens: ItemDaFila[];
+  aberto: boolean;
+  onFechar: () => void;
+}) {
+  const t = useT();
+  return (
+    <Dialog open={aberto} onOpenChange={(v) => !v && onFechar()}>
+      <DialogContent className="max-w-3xl" data-testid="pessoas-do-retorno">
+        <DialogHeader>
+          <DialogTitle>
+            {t("Pessoas no fluxo")} · {nome}
+          </DialogTitle>
+          <DialogDescription>
+            {t("Quem espera o retorno deste procedimento e o que aconteceu com os últimos envios (30 dias).")}
+          </DialogDescription>
+        </DialogHeader>
+        {itens.length === 0 ? (
+          <p className="py-6 text-center text-sm text-text-muted">{t("Ninguém neste retorno por enquanto.")}</p>
+        ) : (
+          <div className="max-h-[60vh] overflow-auto">
+            <TabelaDePessoas itens={itens} />
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /**
  * Aba "Fluxos" da tela Follow-ups: o retorno automático de cada procedimento,
  * no mesmo formato dos fluxos. Não é um fluxo do motor (o envio é o cron de
@@ -38,6 +125,7 @@ const ROTULO_DO_ESTADO: Record<string, { texto: string; tom: "neutral" | "succes
 export function RetornosNosFluxos({ canWrite }: { canWrite: boolean }) {
   const t = useT();
   const { data, isError } = useRetornosDeProcedimentos();
+  const [aberto, setAberto] = useState<string | null>(null);
   if (isError || !data || data.procedimentos.length === 0) return null;
 
   return (
@@ -64,7 +152,7 @@ export function RetornosNosFluxos({ canWrite }: { canWrite: boolean }) {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-text-muted">{t("Aguardando")}</dt>
+                  <dt className="text-text-muted">{t("Pessoas no fluxo")}</dt>
                   <dd className="font-mono">{p.aguardando}</dd>
                 </div>
                 <div>
@@ -75,13 +163,22 @@ export function RetornosNosFluxos({ canWrite }: { canWrite: boolean }) {
               <p className="text-xs text-text-muted">
                 {t("Próximo retorno")}: {dia(p.proximo_vencimento)}
               </p>
-              {canWrite && (
-                <div className="mt-auto flex justify-end border-t border-border pt-3">
+              <div className="mt-auto flex items-center justify-end gap-3 border-t border-border pt-3">
+                <Button size="sm" variant="outline" onClick={() => setAberto(p.id)} data-testid={`ver-pessoas-${p.id}`}>
+                  {t("Ver pessoas")}
+                </Button>
+                {canWrite && (
                   <Link className="text-xs underline" href="/app/settings/procedimentos">
                     {t("Editar mensagem e etapa")}
                   </Link>
-                </div>
-              )}
+                )}
+              </div>
+              <PessoasDoRetorno
+                nome={p.nome}
+                itens={data.fila.filter((i) => i.procedimento_id === p.id)}
+                aberto={aberto === p.id}
+                onFechar={() => setAberto(null)}
+              />
             </Card>
           </li>
         ))}
@@ -100,33 +197,7 @@ export function RetornosNaFila() {
     <section className="mb-6" data-testid="retornos-na-fila">
       <h2 className="mb-3 text-sm font-medium">{t("Retornos de procedimentos")}</h2>
       <Card className="overflow-x-auto p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t("Contato")}</TableHead>
-              <TableHead>{t("Procedimento")}</TableHead>
-              <TableHead>{t("Feito em")}</TableHead>
-              <TableHead>{t("Retorno em")}</TableHead>
-              <TableHead>{t("Situação")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.fila.map((item) => {
-              const estado = ROTULO_DO_ESTADO[item.estado] ?? ROTULO_DO_ESTADO.aguardando!;
-              return (
-                <TableRow key={item.id}>
-                  <TableCell>{item.paciente}</TableCell>
-                  <TableCell>{item.procedimento}</TableCell>
-                  <TableCell>{dia(item.realizado_em)}</TableCell>
-                  <TableCell>{dia(item.vence_em)}</TableCell>
-                  <TableCell>
-                    <Badge variant={estado.tom}>{t(estado.texto)}</Badge>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+        <TabelaDePessoas itens={data.fila} />
       </Card>
     </section>
   );

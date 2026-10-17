@@ -6,6 +6,7 @@ function linha(over: Partial<LinhaDoRetorno>): LinhaDoRetorno {
   return {
     id: "l",
     lead_id: "lead",
+    contact_id: "c1",
     procedimento_id: "p1",
     nome: "Botox",
     realizado_em: "2026-04-15",
@@ -69,6 +70,7 @@ describe("resumirRetornos", () => {
       ["c", "expirado"],
     ]);
     expect(r.fila[0]!.paciente).toBe("Maria Silva");
+    expect(r.fila[0]).toMatchObject({ contact_id: "c1", procedimento_id: "p1" });
     expect(r.fila[1]!.paciente).toBe("Lead sem contato");
   });
 
