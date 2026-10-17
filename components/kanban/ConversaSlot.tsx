@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { MouseEvent } from "react";
 
 import { useT } from "@/hooks/i18n/useT";
+import { abrirConversaAoLado } from "@/lib/ui/abrir-conversa-ao-lado";
 import { ChatCircle } from "@/lib/ui/icons";
 import type { Lead } from "@/lib/types/leads";
 import { cn } from "@/lib/utils";
@@ -43,7 +44,13 @@ export function ConversaSlot({ conversa }: { conversa: Lead["conversa"] }) {
       // O card inteiro é arrastável e clicável (abre o dossiê). Sem parar a
       // propagação, o clique no atalho também abriria o dossiê por baixo — dois
       // destinos para um gesto.
-      onClick={(e: MouseEvent) => e.stopPropagation()}
+      // A conversa abre numa janela estreita ao lado, a mesma da Prospecção,
+      // com o rascunho pendente já no campo: quem trabalha a coluna "Mensagem
+      // pronta" envia uma a uma sem sair do quadro. Ctrl/Cmd mantêm o link comum.
+      onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+        e.stopPropagation();
+        abrirConversaAoLado(e);
+      }}
       onPointerDown={(e: MouseEvent) => e.stopPropagation()}
       className={cn(
         "group/conversa mt-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[11px]",

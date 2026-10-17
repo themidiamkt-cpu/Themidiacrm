@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, type MouseEvent } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { randomId } from "@/lib/random-id";
 import { useQuery } from "@tanstack/react-query";
@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiClient } from "@/lib/api/client";
 import { useT } from "@/hooks/i18n/useT";
+import { abrirConversaAoLado } from "@/lib/ui/abrir-conversa-ao-lado";
 import {
   isManualMessageConfig,
   safePublicLink,
@@ -85,34 +86,6 @@ const labels: Record<string, string> = {
 };
 const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
 
-/**
- * Abre a conversa numa janela estreita ao lado, em vez de trocar de tela.
- *
- * Quem está enviando uma lista de abordagens perdia a posição a cada conversa:
- * ia para o Inbox, voltava, procurava a próxima empresa. A janela tem sempre o
- * mesmo nome, então o clique seguinte reaproveita a mesma janela. É uma janela
- * do navegador, e não uma moldura dentro da página, porque o produto proíbe ser
- * emoldurado (`X-Frame-Options: DENY`) — e essa proteção fica.
- *
- * Com Ctrl, Cmd, Shift ou botão do meio o link segue como link comum; e, se o
- * navegador bloquear a janela, a navegação normal acontece.
- */
-function abrirConversaAoLado(event: MouseEvent<HTMLAnchorElement>) {
-  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
-    return;
-  const largura = 520;
-  const altura = Math.min(860, window.screen.availHeight - 40);
-  const esquerda = Math.max(0, window.screenX + window.outerWidth - largura - 16);
-  const topo = Math.max(0, window.screenY + 40);
-  const janela = window.open(
-    event.currentTarget.href,
-    "prospeccao-inbox",
-    `popup=yes,width=${largura},height=${altura},left=${esquerda},top=${topo}`,
-  );
-  if (!janela) return;
-  event.preventDefault();
-  janela.focus();
-}
 const emptyConfig: CampaignConfig = {
   agent_id: "",
   channel_session_id: "",

@@ -7,6 +7,7 @@ import {
   ehUuid,
   JANELA_PADRAO_HORAS,
   lerRascunho,
+  lerRascunhoPendente,
   TEXTO_MAXIMO,
   urlDoRascunho,
 } from "@/lib/inbox/rascunho-sugerido";
@@ -63,6 +64,7 @@ function bancoFake(drafts: Linha[], conversas: Linha[]) {
     const filtros: Filtro[] = [];
     let inserts: Linha | null = null;
     let updates: Linha | null = null;
+    let ordem: { coluna: string; asc: boolean } | null = null;
     const linhas = () => (tabela === "conversation_drafts" ? drafts : conversas);
 
     const q = {
@@ -87,6 +89,11 @@ function bancoFake(drafts: Linha[], conversas: Linha[]) {
         filtros.push({ coluna, valor: { gt: valor } });
         return q;
       },
+      order: (coluna: string, opcoes?: { ascending?: boolean }) => {
+        ordem = { coluna, asc: opcoes?.ascending !== false };
+        return q;
+      },
+      limit: () => q,
       maybeSingle: async () => {
         consultas.push({ tabela, filtros: [...filtros] });
         if (inserts) {
@@ -94,7 +101,15 @@ function bancoFake(drafts: Linha[], conversas: Linha[]) {
           drafts.push(nova);
           return { data: { id: nova.id }, error: null };
         }
-        const alvo = linhas().find((l) => casa(l, filtros)) ?? null;
+        const candidatas = linhas().filter((l) => casa(l, filtros));
+        if (ordem) {
+          const { coluna, asc } = ordem;
+          candidatas.sort((a, b) => {
+            const d = new Date(String(a[coluna])).getTime() - new Date(String(b[coluna])).getTime();
+            return asc ? d : -d;
+          });
+        }
+        const alvo = candidatas[0] ?? null;
         if (updates) {
           if (!alvo) return { data: null, error: null };
           Object.assign(alvo, updates);
@@ -284,6 +299,69 @@ describe("lerRascunho — o que a caixa de entrada mostra", () => {
     expect(consultas).toHaveLength(0);
     expect(ehUuid(DRAFT)).toBe(true);
     expect(ehUuid("abc")).toBe(false);
+  });
+});
+
+describe("lerRascunhoPendente — abrir a conversa sem o ID do rascunho", () => {
+  it("traz o rascunho pendente da conversa (cartão do funil, contatos, Radar)", async () => {
+    const { cliente } = bancoFake([rascunho()], [conversaA]);
+    const r = await lerRascunhoPendente(cliente, { organizationId: ORG_A, conversationId: CONV_A });
+    expect(r).toEqual({
+      estado: "sugerido",
+      draftId: DRAFT,
+      conversationId: CONV_A,
+      texto: "Sua cobrança venceu hoje.",
+      origem: "erp",
+    });
+  });
+
+  it("havendo mais de um, vale o MAIS RECENTE", async () => {
+    const velho = rascunho({
+      id: "aaaaaaaa-2222-4000-8000-000000000002",
+      body: "texto antigo",
+      created_at: "2026-10-01T10:00:00.000Z",
+    });
+    const novo = rascunho({
+      id: "aaaaaaaa-2222-4000-8000-000000000003",
+      body: "texto novo",
+      created_at: "2026-10-02T10:00:00.000Z",
+    });
+    const { cliente } = bancoFake([velho, novo], [conversaA]);
+    const r = await lerRascunhoPendente(cliente, { organizationId: ORG_A, conversationId: CONV_A });
+    expect(r).toMatchObject({ estado: "sugerido", texto: "texto novo" });
+  });
+
+  it("ignora o já usado e o vencido: nada a oferecer", async () => {
+    const usado = rascunho({ consumed_at: new Date().toISOString() });
+    const vencido = rascunho({
+      id: "aaaaaaaa-2222-4000-8000-000000000004",
+      expires_at: new Date(Date.now() - 1000).toISOString(),
+    });
+    const { cliente } = bancoFake([usado, vencido], [conversaA]);
+    expect(
+      await lerRascunhoPendente(cliente, { organizationId: ORG_A, conversationId: CONV_A }),
+    ).toBeNull();
+  });
+
+  it("não alcança rascunho de outra conversa nem de outra organização", async () => {
+    const { cliente } = bancoFake(
+      [
+        rascunho({ conversation_id: CONV_B, organization_id: ORG_B }),
+        rascunho({ id: "aaaaaaaa-2222-4000-8000-000000000005", organization_id: ORG_B }),
+      ],
+      [conversaA, conversaB],
+    );
+    expect(
+      await lerRascunhoPendente(cliente, { organizationId: ORG_A, conversationId: CONV_A }),
+    ).toBeNull();
+  });
+
+  it("UUID malformado nem chega ao banco", async () => {
+    const { cliente, consultas } = bancoFake([rascunho()], [conversaA]);
+    expect(
+      await lerRascunhoPendente(cliente, { organizationId: ORG_A, conversationId: "nao-e-uuid" }),
+    ).toBeNull();
+    expect(consultas).toHaveLength(0);
   });
 });
 

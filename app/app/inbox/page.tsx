@@ -5,7 +5,11 @@ import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { InboxLayout } from "@/components/inbox/InboxLayout";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
-import { lerRascunho, type AvisoDeRascunho } from "@/lib/inbox/rascunho-sugerido";
+import {
+  lerRascunho,
+  lerRascunhoPendente,
+  type AvisoDeRascunho,
+} from "@/lib/inbox/rascunho-sugerido";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Inbox" };
@@ -56,6 +60,23 @@ export default async function InboxPage({
         draftId: rascunho,
       }),
     };
+  }
+  // Sem `?rascunho=` (cartão do funil, lista de contatos, Radar), a conversa
+  // abre com o rascunho PENDENTE mais recente dela, se houver. A Prospecção em
+  // "Mensagem manual" guarda a mensagem pronta como rascunho e esses atalhos
+  // não carregavam o ID: o texto existia e o campo nascia vazio. A leitura não
+  // pode derrubar a tela, então qualquer falha vira "sem rascunho".
+  if (!rascunho && id) {
+    try {
+      const db = await createClient();
+      const pendente = await lerRascunhoPendente(db, {
+        organizationId: activeOrg.orgId,
+        conversationId: id,
+      });
+      if (pendente) avisoDeRascunho = { conversationId: id, leitura: pendente };
+    } catch {
+      avisoDeRascunho = null;
+    }
   }
   return <InboxLayout initialSelectedId={id ?? null} rascunho={avisoDeRascunho} />;
 }

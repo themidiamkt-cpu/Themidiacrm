@@ -229,3 +229,50 @@ export async function lerRascunho(
     origem: data.source as string,
   };
 }
+
+interface EntradaDeLeituraPendente {
+  organizationId: string;
+  conversationId: string;
+}
+
+/**
+ * O rascunho PENDENTE mais recente da conversa, para quem abre o Inbox sem
+ * `?rascunho=`.
+ *
+ * Por que existe: a Prospecção em "Mensagem manual" deixa a mensagem pronta como
+ * rascunho, mas quem chega na conversa pelo cartão do funil, pela lista de
+ * contatos ou pelo Radar abre `/app/inbox?id=<conversa>` — sem o ID do rascunho
+ * — e o campo nascia vazio. O texto estava guardado e ninguém o via.
+ *
+ * Regras: é a mesma régua do consumo (não usado e não vencido) com o
+ * `organization_id` na consulta, e a RLS da sessão ainda decide o que a pessoa
+ * enxerga. Sem rascunho pendente devolve `null` e a tela segue como antes: aqui
+ * não existe "aviso" para dar, porque ninguém pediu um rascunho em particular.
+ */
+export async function lerRascunhoPendente(
+  db: SupabaseClient,
+  entrada: EntradaDeLeituraPendente,
+): Promise<LeituraDoRascunho | null> {
+  if (!ehUuid(entrada.conversationId)) return null;
+
+  const { data } = await db
+    .from("conversation_drafts")
+    .select("id, conversation_id, body, source")
+    .eq("organization_id", entrada.organizationId)
+    .eq("conversation_id", entrada.conversationId)
+    .is("consumed_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) return null;
+
+  return {
+    estado: "sugerido",
+    draftId: data.id as string,
+    conversationId: data.conversation_id as string,
+    texto: data.body as string,
+    origem: data.source as string,
+  };
+}
