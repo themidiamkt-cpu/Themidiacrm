@@ -15,6 +15,8 @@ import type { EnrollmentRow } from "@/lib/followup/node-handlers";
 import { completeTurnForEnrollment, type TurnBridgeAdminClient } from "@/lib/followup/turn-bridge";
 import { logger } from "@/lib/logger";
 import { OrgNaoOperanteError } from "@/lib/organizacao/operante";
+import { interpolarContato } from "@/lib/texto/empresa-do-nome";
+import { decidirRitmoDoEnvioAutomatico, registrarEnvioAutomatico } from "@/lib/automation/ritmo-do-envio-automatico";
 
 function ponteSupabase(admin: SupabaseClient): TurnBridgeAdminClient {
   const base = createSupabaseAdminClient(admin);
@@ -54,6 +56,17 @@ function fimDoMilissegundoCorrente(): string {
   return new Date(Date.now() + 1).toISOString();
 }
 
+/** Canal (número) pelo qual a conversa sai: é o que conta o intervalo entre envios. */
+async function canalDaConversa(admin: SupabaseClient, organizationId: string, conversationId: string): Promise<string | null> {
+  const { data } = await admin
+    .from("conversations")
+    .select("channel_session_id")
+    .eq("id", conversationId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  return (data as { channel_session_id?: string | null } | null)?.channel_session_id ?? null;
+}
+
 /** Envia o texto fixo do fluxo neste request — sem cron e sem agent-worker. */
 export async function enviarTextoFixoPendente(
   admin: SupabaseClient,
@@ -70,8 +83,8 @@ export async function enviarTextoFixoPendente(
   if (error) throw new Error(error.message);
 
   const workerId=`inline-followup:${randomUUID()}`;
-  async function settle(org:string,id:string,acquiredAt:string,done:boolean,error?:string,deferred?:AgendaDeferredError){
-    const {data:held,error:failure}=await admin.rpc("fn_followup_inline_settle",{p_org:org,p_id:id,p_worker:workerId,p_acquired_at:acquiredAt,p_done:done,p_error:error??null,p_retry_at:deferred?.protection.reavaliar_em??null,p_hold:!!deferred&&deferred.protection.motivo!=="leitura_indisponivel"});
+  async function settle(org:string,id:string,acquiredAt:string,done:boolean,error?:string,deferred?:AgendaDeferredError,adiadoAte?:string){
+    const {data:held,error:failure}=await admin.rpc("fn_followup_inline_settle",{p_org:org,p_id:id,p_worker:workerId,p_acquired_at:acquiredAt,p_done:done,p_error:error??null,p_retry_at:deferred?.protection.reavaliar_em??adiadoAte??null,p_hold:(!!deferred&&deferred.protection.motivo!=="leitura_indisponivel")||!!adiadoAte});
     if(failure) throw failure;
     if(!held) throw new StaleServiceBoundaryError();
   }
@@ -79,11 +92,11 @@ export async function enviarTextoFixoPendente(
   const ponte = ponteSupabase(admin);
   for (const job of jobs ?? []) {
     const payload = (job.payload ?? {}) as FollowupJobRequest["payload"];
-    const body = payload.fixed_body;
+    const bodyBruto = payload.fixed_body;
     const enrollmentId = payload.followup_enrollment_id;
     const nodeId = payload.node_id;
     const contactId = job.contact_id as string | null;
-    if (typeof body !== "string" || !body || !enrollmentId || !nodeId || !contactId) continue;
+    if (typeof bodyBruto !== "string" || !bodyBruto || !enrollmentId || !nodeId || !contactId) continue;
     if (somenteContactIds && !somenteContactIds.includes(contactId)) continue;
 
     const { data: claimed, error: claimErr } = await admin
@@ -135,6 +148,40 @@ export async function enviarTextoFixoPendente(
         continue;
       }
 
+      // `{{nome}}`/`{{empresa}}`: texto do operador não sai com marcação crua nem
+      // com buraco. Sem valor utilizável o job fecha sem enviar, como a conversa
+      // não elegível acima, e o motivo fica no log.
+      const { data: contato } = await admin
+        .from("contacts")
+        .select("name")
+        .eq("id", contactId)
+        .eq("organization_id", job.organization_id as string)
+        .maybeSingle();
+      const { texto: body, faltando } = interpolarContato(bodyBruto, (contato?.name as string | null) ?? null);
+      if (faltando.length > 0) {
+        logger.warn("[followup] texto fixo não enviado — contato sem dado para a marcação", {
+          organization_id: job.organization_id,
+          enrollment_id: enrollmentId,
+          faltando,
+        });
+        await settle(job.organization_id,job.id,jobClaim.acquired_at,true);
+        continue;
+      }
+
+      // Ritmo dos automáticos: um envio por vez e nada no fim de semana. O envio
+      // ESTACIONA, não cancela: o enrollment recebe o adiamento (como na janela
+      // anti-ban) e o job volta para o instante de liberação. Um adiamento por
+      // tique basta; os jobs restantes são reavaliados no tique seguinte.
+      const canal = await canalDaConversa(admin, job.organization_id as string, conversationId);
+      if (canal) {
+        const ritmo = await decidirRitmoDoEnvioAutomatico(admin, job.organization_id as string, canal, new Date());
+        if (!ritmo.liberado) {
+          await completeTurnForEnrollment(ponte, job.organization_id as string, enrollmentId, nodeId, { kind: "deferred", until: ritmo.liberaEm, reason: ritmo.motivo }, undefined, job.id, jobClaim);
+          await settle(job.organization_id,job.id,jobClaim.acquired_at,false,undefined,undefined,ritmo.liberaEm.toISOString());
+          break;
+        }
+      }
+
       const proactiveContext={organizationId:job.organization_id as string,contactId,enrollmentId,nodeId,jobId:job.id,jobClaim};
       await assertAgendaEffectSupabase(admin,proactiveContext);
       const resultado=await sendWithLedger(supabaseSendLedger(admin),{tenantId:job.organization_id,leadId:contactId,jobId:job.id,seq:1,body},async(key,messageId)=>sendMessageHandler(
@@ -144,6 +191,7 @@ export async function enviarTextoFixoPendente(
       ));
       if(resultado.kind!=="sent" && resultado.kind!=="already_sent") throw new Error(`message_${resultado.kind}`);
       enviados++;
+      if (canal) await registrarEnvioAutomatico(admin, job.organization_id as string, canal, new Date());
       await completeTurnForEnrollment(ponte, job.organization_id, enrollmentId, nodeId, {
         kind: "sent",
       },undefined,job.id,jobClaim);

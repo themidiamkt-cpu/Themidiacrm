@@ -23,6 +23,12 @@ vi.mock("@/lib/followup/turn-bridge", () => ({
   completeTurnForEnrollment: (...a: unknown[]) => completeTurnForEnrollment(...a),
 }));
 vi.mock("@/lib/followup/engine", () => ({ createSupabaseAdminClient: () => ({}) }));
+const ritmo = vi.fn(async (..._a: unknown[]): Promise<Record<string, unknown>> => ({ liberado: true }));
+const registrarEnvio = vi.fn(async (..._a: unknown[]) => {});
+vi.mock("@/lib/automation/ritmo-do-envio-automatico", () => ({
+  decidirRitmoDoEnvioAutomatico: (...a: unknown[]) => ritmo(...a),
+  registrarEnvioAutomatico: (...a: unknown[]) => registrarEnvio(...a),
+}));
 vi.mock("@/lib/logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 import { enviarTextoFixoPendente } from "./enviar-texto-fixo";
@@ -64,6 +70,7 @@ function admin() {
         if (table === "job_queue" && chain._upd) return Promise.resolve({ data: { id: JOB.id, locked_by:chain._upd.locked_by, locked_at:chain._upd.locked_at }, error: null });
         if (table === "followup_enrollments")
           return Promise.resolve({ data: { current_node_id: "node-1",status:"active",revision:1 }, error: null });
+        if (table === "conversations") return Promise.resolve({ data: { channel_session_id: "sess-1" }, error: null });
         return Promise.resolve({ data: null, error: null });
       },
       then: (r: (v: unknown) => unknown) => {
@@ -87,6 +94,31 @@ beforeEach(() => {
   vi.clearAllMocks();
   statusUpdates.length = 0;
   filtrosRunAfter.length = 0;
+  ritmo.mockResolvedValue({ liberado: true });
+});
+
+describe("enviarTextoFixoPendente · ritmo dos automáticos", () => {
+  it("fora do ritmo (fim de semana) → NÃO envia, NÃO cancela: devolve o adiamento ao enrollment e o job fica pendente", async () => {
+    decidir.mockResolvedValue({ permite: true });
+    const liberaEm = new Date("2026-10-26T10:00:00Z");
+    ritmo.mockResolvedValueOnce({ liberado: false, motivo: "fim_de_semana", liberaEm });
+    const enviados = await enviarTextoFixoPendente(admin());
+    expect(enviados).toBe(0);
+    expect(sendMessageHandler).not.toHaveBeenCalled();
+    expect(completeTurnForEnrollment).toHaveBeenCalledWith(
+      expect.anything(), "org-1", "enr-1", "node-1",
+      { kind: "deferred", until: liberaEm, reason: "fim_de_semana" },
+      undefined, "job-1", expect.anything(),
+    );
+    expect(statusUpdates).toContain("pending");
+    expect(statusUpdates).not.toContain("done");
+  });
+
+  it("envio feito → registra no ledger para o próximo job ver o intervalo", async () => {
+    decidir.mockResolvedValue({ permite: true });
+    expect(await enviarTextoFixoPendente(admin())).toBe(1);
+    expect(registrarEnvio).toHaveBeenCalledWith(expect.anything(), "org-1", "sess-1", expect.any(Date));
+  });
 });
 
 describe("enviarTextoFixoPendente · gate de elegibilidade", () => {
